@@ -1,0 +1,4 @@
+# _name = "bzd-gw"
+
+[http]
+endpoint = "0.0.0.0:3000"
