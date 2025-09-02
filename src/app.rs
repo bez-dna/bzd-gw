@@ -5,6 +5,8 @@ use tracing::info;
 use crate::app::{settings::AppSettings, state::AppState};
 
 mod auth;
+mod error;
+mod json;
 mod settings;
 mod state;
 
