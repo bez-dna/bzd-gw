@@ -1,11 +1,19 @@
-use axum::{Router, extract::State, routing::post};
+pub mod settings;
 
-use crate::app::{error::AppError, json::AppJson, state::AppState};
+use axum::{
+    Router,
+    extract::State,
+    routing::{get, post},
+};
+use bzd_users_api::GetUserRequest;
+
+use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/join", post(join))
         .route("/complete", post(complete))
+        .route("/me", get(me))
 }
 
 async fn join(
@@ -15,7 +23,7 @@ async fn join(
     }): State<AppState>,
     AppJson(data): AppJson<join::Request>,
 ) -> Result<AppJson<join::Response>, AppError> {
-    let request: bzd_users_api::JoinRequest = data.into();
+    let request: bzd_users_api::JoinRequest = data.try_into()?;
 
     let response = auth_service_client
         .clone()
@@ -34,14 +42,16 @@ mod join {
 
     #[derive(Deserialize)]
     pub struct Request {
-        pub phone_number: i64,
+        pub phone_number: String,
     }
 
-    impl From<Request> for bzd_users_api::JoinRequest {
-        fn from(req: Request) -> Self {
-            Self {
-                phone_number: Some(req.phone_number),
-            }
+    impl TryFrom<Request> for bzd_users_api::JoinRequest {
+        type Error = AppError;
+
+        fn try_from(req: Request) -> Result<Self, Self::Error> {
+            Ok(Self {
+                phone_number: Some(req.phone_number.parse::<i64>()?),
+            })
         }
     }
 
@@ -119,6 +129,63 @@ mod complete {
             Self {
                 jwt: res.jwt().into(),
             }
+        }
+    }
+}
+
+async fn me(
+    State(AppState {
+        users_service_client,
+        ..
+    }): State<AppState>,
+    user: Option<AppUser>,
+) -> Result<AppJson<me::Response>, AppError> {
+    let res = match user {
+        Some(user) => {
+            let req = GetUserRequest {
+                user_id: Some(user.user_id),
+            };
+
+            users_service_client
+                .clone()
+                .get_user(req)
+                .await?
+                .into_inner()
+                .try_into()?
+        }
+        None => me::Response { user: None },
+    };
+
+    Ok(AppJson(res))
+}
+
+mod me {
+    use bzd_users_api::GetUserResponse;
+    use serde::Serialize;
+
+    use crate::app::error::AppError;
+
+    #[derive(Serialize)]
+    pub struct Response {
+        pub user: Option<User>,
+    }
+
+    #[derive(Serialize)]
+    pub struct User {
+        pub user_id: String,
+    }
+
+    impl TryFrom<GetUserResponse> for Response {
+        type Error = AppError;
+
+        fn try_from(res: GetUserResponse) -> Result<Self, Self::Error> {
+            let user = res.user.ok_or(AppError::NoEntity)?;
+
+            Ok(Self {
+                user: Some(User {
+                    user_id: user.user_id().into(),
+                }),
+            })
         }
     }
 }
