@@ -1,7 +1,10 @@
+use std::num::ParseIntError;
+
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use axum_extra::typed_header::TypedHeaderRejection;
 use thiserror::Error;
 use tracing::{debug, error};
 
@@ -11,8 +14,14 @@ pub enum AppError {
     Status(#[from] tonic::Status),
     #[error(transparent)]
     Json(#[from] axum::extract::rejection::JsonRejection),
+    #[error(transparent)]
+    Jwt(#[from] jsonwebtoken::errors::Error),
     #[error("NO_ENTITY")]
     NoEntity,
+    #[error("PARSE")]
+    Parse,
+    #[error("UNKNOWN")]
+    Unknown,
 }
 
 impl IntoResponse for AppError {
@@ -26,9 +35,23 @@ impl IntoResponse for AppError {
                 _ => StatusCode::BAD_REQUEST,
             },
             AppError::Json(_) => StatusCode::BAD_REQUEST,
-            AppError::NoEntity => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::NoEntity | AppError::Parse | AppError::Jwt(_) | AppError::Unknown => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         (code, String::from("")).into_response()
+    }
+}
+
+impl From<ParseIntError> for AppError {
+    fn from(_: ParseIntError) -> Self {
+        Self::Unknown
+    }
+}
+
+impl From<TypedHeaderRejection> for AppError {
+    fn from(_: TypedHeaderRejection) -> Self {
+        Self::Unknown
     }
 }

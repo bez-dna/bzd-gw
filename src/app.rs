@@ -9,6 +9,7 @@ mod error;
 mod json;
 mod settings;
 mod state;
+mod user;
 
 pub async fn run() -> Result<(), Error> {
     let settings = AppSettings::new()?;

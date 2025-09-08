@@ -1,5 +1,8 @@
 use bzd_lib::error::Error;
-use bzd_users_api::auth_service_client::AuthServiceClient;
+use bzd_users_api::{
+    auth_service_client::AuthServiceClient, users_service_client::UsersServiceClient,
+};
+use tokio::fs;
 use tonic::transport::Channel;
 
 use crate::app::settings::AppSettings;
@@ -8,6 +11,8 @@ use crate::app::settings::AppSettings;
 pub struct AppState {
     pub settings: AppSettings,
     pub auth_service_client: AuthServiceClient<Channel>,
+    pub users_service_client: UsersServiceClient<Channel>,
+    pub public_key: Vec<u8>,
 }
 
 impl AppState {
@@ -15,9 +20,18 @@ impl AppState {
         let auth_service_client =
             Self::auth_service_client(settings.clients.bzd_users.endpoint.clone()).await?;
 
+        let users_service_client =
+            Self::users_service_client(settings.clients.bzd_users.endpoint.clone()).await?;
+
+        let public_key = fs::read_to_string(&settings.auth.public_key_file)
+            .await?
+            .into_bytes();
+
         Ok(Self {
             settings,
             auth_service_client,
+            users_service_client,
+            public_key,
         })
     }
 
@@ -25,5 +39,11 @@ impl AppState {
         let ch = tonic::transport::Endpoint::new(dst)?.connect_lazy();
 
         Ok(AuthServiceClient::new(ch))
+    }
+
+    async fn users_service_client(dst: String) -> Result<UsersServiceClient<Channel>, Error> {
+        let ch = tonic::transport::Endpoint::new(dst)?.connect_lazy();
+
+        Ok(UsersServiceClient::new(ch))
     }
 }
