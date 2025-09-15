@@ -1,4 +1,7 @@
 use bzd_lib::error::Error;
+use bzd_messages_api::{
+    messages_service_client::MessagesServiceClient, topics_service_client::TopicsServiceClient,
+};
 use bzd_users_api::{
     auth_service_client::AuthServiceClient, users_service_client::UsersServiceClient,
 };
@@ -12,6 +15,8 @@ pub struct AppState {
     pub settings: AppSettings,
     pub auth_service_client: AuthServiceClient<Channel>,
     pub users_service_client: UsersServiceClient<Channel>,
+    pub messages_service_client: MessagesServiceClient<Channel>,
+    pub topics_service_client: TopicsServiceClient<Channel>,
     pub public_key: Vec<u8>,
 }
 
@@ -23,6 +28,12 @@ impl AppState {
         let users_service_client =
             Self::users_service_client(settings.clients.bzd_users.endpoint.clone()).await?;
 
+        let messages_service_client =
+            Self::messages_service_client(settings.clients.bzd_messages.endpoint.clone()).await?;
+
+        let topics_service_client =
+            Self::topics_service_client(settings.clients.bzd_messages.endpoint.clone()).await?;
+
         let public_key = fs::read_to_string(&settings.auth.public_key_file)
             .await?
             .into_bytes();
@@ -31,6 +42,8 @@ impl AppState {
             settings,
             auth_service_client,
             users_service_client,
+            messages_service_client,
+            topics_service_client,
             public_key,
         })
     }
@@ -45,5 +58,17 @@ impl AppState {
         let ch = tonic::transport::Endpoint::new(dst)?.connect_lazy();
 
         Ok(UsersServiceClient::new(ch))
+    }
+
+    async fn messages_service_client(dst: String) -> Result<MessagesServiceClient<Channel>, Error> {
+        let ch = tonic::transport::Endpoint::new(dst)?.connect_lazy();
+
+        Ok(MessagesServiceClient::new(ch))
+    }
+
+    async fn topics_service_client(dst: String) -> Result<TopicsServiceClient<Channel>, Error> {
+        let ch = tonic::transport::Endpoint::new(dst)?.connect_lazy();
+
+        Ok(TopicsServiceClient::new(ch))
     }
 }

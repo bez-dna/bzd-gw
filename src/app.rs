@@ -9,6 +9,7 @@ mod error;
 mod json;
 mod settings;
 mod state;
+mod topics;
 mod user;
 
 pub async fn run() -> Result<(), Error> {
@@ -26,7 +27,8 @@ async fn http(state: &AppState) -> Result<(), Error> {
             "/api",
             Router::new()
                 .route("/healthz", get(|| async {}))
-                .nest("/auth", auth::router()),
+                .nest("/auth", auth::router())
+                .nest("/topics", topics::router()),
         )
         .with_state(state.to_owned());
 
