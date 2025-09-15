@@ -7,6 +7,7 @@ use crate::app::{settings::AppSettings, state::AppState};
 mod auth;
 mod error;
 mod json;
+mod messages;
 mod settings;
 mod state;
 mod topics;
@@ -28,7 +29,8 @@ async fn http(state: &AppState) -> Result<(), Error> {
             Router::new()
                 .route("/healthz", get(|| async {}))
                 .nest("/auth", auth::router())
-                .nest("/topics", topics::router()),
+                .nest("/topics", topics::router())
+                .nest("/messages", messages::router()),
         )
         .with_state(state.to_owned());
 
