@@ -73,7 +73,7 @@ mod join {
                 verification: Verification {
                     verification_id: res
                         .verification
-                        .ok_or(AppError::NoEntity)?
+                        .ok_or(AppError::Internal)?
                         .verification_id()
                         .into(),
                 },
@@ -179,7 +179,7 @@ mod me {
         type Error = AppError;
 
         fn try_from(res: GetUserResponse) -> Result<Self, Self::Error> {
-            let user = res.user.ok_or(AppError::NoEntity)?;
+            let user = res.user.ok_or(AppError::Internal)?;
 
             Ok(Self {
                 user: Some(User {

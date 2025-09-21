@@ -15,6 +15,7 @@ pub struct AppSettings {
 #[derive(Deserialize, Clone)]
 pub struct ClientsSettings {
     pub bzd_users: ClientSettings,
+    pub bzd_messages: ClientSettings,
 }
 
 #[derive(Deserialize, Clone)]

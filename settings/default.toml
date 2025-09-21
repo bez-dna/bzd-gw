@@ -5,3 +5,6 @@ endpoint = "0.0.0.0:3000"
 
 [clients.bzd_users]
 endpoint = ""
+
+[clients.bzd_messages]
+endpoint = ""
