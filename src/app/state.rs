@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bzd_lib::error::Error;
 use bzd_messages_api::{
     messages_service_client::MessagesServiceClient, topics_service_client::TopicsServiceClient,
@@ -5,10 +7,11 @@ use bzd_messages_api::{
 use bzd_users_api::{
     auth_service_client::AuthServiceClient, users_service_client::UsersServiceClient,
 };
+use jsonwebtoken::DecodingKey;
 use tokio::fs;
 use tonic::transport::Channel;
 
-use crate::app::settings::AppSettings;
+use crate::app::{error::AppError, settings::AppSettings};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -17,7 +20,7 @@ pub struct AppState {
     pub users_service_client: UsersServiceClient<Channel>,
     pub messages_service_client: MessagesServiceClient<Channel>,
     pub topics_service_client: TopicsServiceClient<Channel>,
-    pub public_key: Vec<u8>,
+    pub decoding_key: Arc<DecodingKey>,
 }
 
 impl AppState {
@@ -38,13 +41,16 @@ impl AppState {
             .await?
             .into_bytes();
 
+        let decoding_key =
+            Arc::new(DecodingKey::from_rsa_pem(&public_key).map_err(|_| AppError::Internal)?);
+
         Ok(Self {
             settings,
             auth_service_client,
             users_service_client,
             messages_service_client,
             topics_service_client,
-            public_key,
+            decoding_key,
         })
     }
 
