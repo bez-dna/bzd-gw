@@ -10,6 +10,7 @@ mod error;
 mod json;
 mod messages;
 mod settings;
+mod sources;
 mod state;
 mod topics;
 mod user;
@@ -32,6 +33,7 @@ async fn http(state: &AppState) -> Result<(), Error> {
                 .nest("/auth", auth::router())
                 .nest("/contacts", contacts::router())
                 .nest("/topics", topics::router())
+                .nest("/sources", sources::router())
                 .nest("/messages", messages::router()),
         )
         .with_state(state.to_owned());

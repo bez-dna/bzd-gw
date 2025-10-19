@@ -4,7 +4,7 @@ edition = "2024"
 
 [dependencies]
 bzd-lib = { git = "https://github.com/bez-dna/bzd-lib.git" }
-bzd-users-api = { git = "https://github.com/bez-dna/bzd-users.git" }
+bzd-users-api = { git = "https://github.com/bez-dna/bzd-users.git", branch = "dev" }
 bzd-messages-api = { git = "https://github.com/bez-dna/bzd-messages.git" }
 
 axum = { version = "0.8.4", features = ["macros"] }
