@@ -72,7 +72,7 @@ mod jwt_2_user {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Claims {
     pub sub: String,
     // pub exp: usize,

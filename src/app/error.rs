@@ -1,4 +1,4 @@
-use std::num::ParseIntError;
+use std::{convert::Infallible, num::ParseIntError};
 
 use axum::{
     http::StatusCode,
@@ -16,6 +16,8 @@ pub enum AppError {
     Json(#[from] axum::extract::rejection::JsonRejection),
     #[error(transparent)]
     Jwt(#[from] jsonwebtoken::errors::Error),
+    #[error(transparent)]
+    Transport(#[from] tonic::transport::Error),
     #[error("COMMON")]
     Common,
     #[error("INTERNAL")]
@@ -38,7 +40,7 @@ impl IntoResponse for AppError {
                 _ => StatusCode::BAD_REQUEST,
             },
             AppError::Common | AppError::Jwt(_) | AppError::Json(_) => StatusCode::BAD_REQUEST,
-            AppError::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Internal | AppError::Transport(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (code, String::from("")).into_response()
@@ -48,6 +50,12 @@ impl IntoResponse for AppError {
 impl From<ParseIntError> for AppError {
     fn from(_: ParseIntError) -> Self {
         Self::Common
+    }
+}
+
+impl From<Infallible> for AppError {
+    fn from(_: Infallible) -> Self {
+        Self::Internal
     }
 }
 

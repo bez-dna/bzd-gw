@@ -58,6 +58,7 @@ mod join {
     #[derive(Serialize)]
     pub struct Response {
         pub verification: Verification,
+        pub is_new: bool,
     }
 
     #[derive(Serialize)]
@@ -70,6 +71,8 @@ mod join {
 
         fn try_from(res: JoinResponse) -> Result<Self, Self::Error> {
             Ok(Self {
+                is_new: res.is_new(),
+
                 verification: Verification {
                     verification_id: res
                         .verification
@@ -108,6 +111,7 @@ mod complete {
     pub struct Request {
         pub verification_id: String,
         pub code: String,
+        pub name: Option<String>,
     }
 
     impl From<Request> for CompleteRequest {
@@ -115,6 +119,7 @@ mod complete {
             Self {
                 verification_id: Some(req.verification_id),
                 code: Some(req.code),
+                name: req.name,
             }
         }
     }
@@ -173,6 +178,9 @@ mod me {
     #[derive(Serialize)]
     pub struct User {
         pub user_id: String,
+        pub name: String,
+        pub abbr: String,
+        pub color: String,
     }
 
     impl TryFrom<GetUserResponse> for Response {
@@ -184,6 +192,9 @@ mod me {
             Ok(Self {
                 user: Some(User {
                     user_id: user.user_id().into(),
+                    name: user.name().into(),
+                    abbr: user.abbr().into(),
+                    color: user.color().into(),
                 }),
             })
         }
