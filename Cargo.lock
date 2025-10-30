@@ -229,7 +229,7 @@ dependencies = [
 [[package]]
 name = "bzd-messages-api"
 version = "0.0.0"
-source = "git+https://github.com/bez-dna/bzd-messages.git#49f473b37e534a1a30e3cff79cafeb52cb941bd1"
+source = "git+https://github.com/bez-dna/bzd-messages.git#dd7604c29bc37d768a5c12dcaf340d684519e405"
 dependencies = [
  "bzd-lib",
  "prost",
@@ -241,7 +241,7 @@ dependencies = [
 [[package]]
 name = "bzd-users-api"
 version = "0.0.0"
-source = "git+https://github.com/bez-dna/bzd-users.git#f5840cbd3ca6edff33200b47ec3e34de979314c2"
+source = "git+https://github.com/bez-dna/bzd-users.git#bdf0d52211a0a156e10af124a96332fc580bc46d"
 dependencies = [
  "bzd-lib",
  "prost",

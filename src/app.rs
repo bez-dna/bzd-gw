@@ -14,6 +14,7 @@ mod sources;
 mod state;
 mod topics;
 mod user;
+mod users;
 
 pub async fn run() -> Result<(), Error> {
     let settings = AppSettings::new()?;
@@ -34,6 +35,7 @@ async fn http(state: &AppState) -> Result<(), Error> {
                 .nest("/contacts", contacts::router())
                 .nest("/topics", topics::router())
                 .nest("/sources", sources::router())
+                .nest("/users", users::router())
                 .nest("/messages", messages::router()),
         )
         .with_state(state.to_owned());
