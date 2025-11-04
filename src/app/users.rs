@@ -1,31 +1,26 @@
 use std::collections::HashSet;
 
-use axum::{
-    Router,
-    extract::{Path, State},
-    routing::get,
-};
+use axum::{Router, extract::State, routing::get};
 use bzd_messages_api::{GetTopicsRequest, GetTopicsUsersRequest};
-use bzd_users_api::{GetSourceRequest, GetSourcesRequest, GetUserRequest, GetUsersRequest};
+use bzd_users_api::{GetSourcesRequest, GetUsersRequest};
 
 use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/", get(get_users))
-        .route("/{user_id}", get(get_user))
+    Router::new().route("/", get(get_users))
 }
 
 async fn get_users(
     State(AppState {
         sources_service_client,
         users_service_client,
+        topics_service_client,
         ..
     }): State<AppState>,
     user: AppUser,
 ) -> Result<AppJson<get_users::Response>, AppError> {
     let req = GetSourcesRequest {
-        user_id: Some(user.user_id.into()),
+        user_id: Some(user.user_id.clone().into()),
     };
 
     let get_sources_response = sources_service_client
@@ -49,19 +44,51 @@ async fn get_users(
     let get_users_response = users_service_client
         .clone()
         .get_users(GetUsersRequest {
+            user_ids: user_ids.clone().into_iter().collect(),
+        })
+        .await?
+        .into_inner();
+
+    let get_topics_response = topics_service_client
+        .clone()
+        .get_topics(GetTopicsRequest {
             user_ids: user_ids.into_iter().collect(),
         })
         .await?
         .into_inner();
 
+    let topic_ids: HashSet<String> = get_topics_response
+        .topics
+        .iter()
+        .map(|it| it.topic_id().into())
+        .collect();
+
+    let get_topics_users_response = topics_service_client
+        .clone()
+        .get_topics_users(GetTopicsUsersRequest {
+            topic_ids: topic_ids.into_iter().collect(),
+            user_id: Some(user.user_id.into()),
+        })
+        .await?
+        .into_inner();
+
     Ok(AppJson(
-        (get_sources_response, get_users_response).try_into()?,
+        (
+            get_sources_response,
+            get_users_response,
+            get_topics_response,
+            get_topics_users_response,
+        )
+            .try_into()?,
     ))
 }
 
 mod get_users {
     use std::collections::HashMap;
 
+    use bzd_messages_api::{
+        GetTopicsResponse, GetTopicsUsersResponse, get_topics_response, get_topics_users_response,
+    };
     use bzd_users_api::{
         GetSourcesResponse, GetUsersResponse, get_sources_response, get_users_response,
     };
@@ -81,6 +108,19 @@ mod get_users {
     pub struct Source {
         pub source_id: String,
         pub user: User,
+        pub topics: Vec<Topic>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Topic {
+        pub topic_id: String,
+        pub title: String,
+        pub topic_user: Option<TopicUser>,
+    }
+
+    #[derive(Serialize)]
+    pub struct TopicUser {
+        pub topic_user_id: String,
     }
 
     type Contacts = Vec<Contact>;
@@ -102,17 +142,40 @@ mod get_users {
     }
 
     type Users = HashMap<String, get_users_response::User>;
+    type Topics = Vec<get_topics_response::Topic>;
+    type TopicsUsers = HashMap<String, get_topics_users_response::TopicUser>;
 
-    impl TryFrom<(GetSourcesResponse, GetUsersResponse)> for Response {
+    // TODO: нужно придумать имя для такой темп структуры
+    type Responses = (
+        GetSourcesResponse,
+        GetUsersResponse,
+        GetTopicsResponse,
+        GetTopicsUsersResponse,
+    );
+
+    impl TryFrom<Responses> for Response {
         type Error = AppError;
 
         fn try_from(
-            (get_sources_response, get_users_response): (GetSourcesResponse, GetUsersResponse),
+            (
+                get_sources_response,
+                get_users_response,
+                get_topics_response,
+                get_topics_users_response,
+            ): Responses,
         ) -> Result<Self, Self::Error> {
             let users: Users = get_users_response
                 .users
                 .into_iter()
-                .map(|user| (user.user_id().into(), user))
+                .map(|it| (it.user_id().into(), it))
+                .collect();
+
+            let topics: Topics = get_topics_response.topics;
+
+            let topics_users: TopicsUsers = get_topics_users_response
+                .topics_users
+                .into_iter()
+                .map(|it| (it.topic_id().into(), it))
                 .collect();
 
             let contacts: Contacts = get_sources_response
@@ -124,7 +187,7 @@ mod get_users {
             let sources: Sources = get_sources_response
                 .sources
                 .into_iter()
-                .map(|source| (source, &users).try_into())
+                .map(|source| (source, &users, &topics, &topics_users).try_into())
                 .collect::<Result<_, _>>()?;
 
             Ok(Self { contacts, sources })
@@ -157,11 +220,16 @@ mod get_users {
         }
     }
 
-    impl TryFrom<(get_sources_response::Source, &Users)> for Source {
+    impl TryFrom<(get_sources_response::Source, &Users, &Topics, &TopicsUsers)> for Source {
         type Error = AppError;
 
         fn try_from(
-            (source, users): (get_sources_response::Source, &Users),
+            (source, users, topics, topics_users): (
+                get_sources_response::Source,
+                &Users,
+                &Topics,
+                &TopicsUsers,
+            ),
         ) -> Result<Self, Self::Error> {
             let user = users
                 .get(&source.source_user_id().to_string())
@@ -178,158 +246,18 @@ mod get_users {
                     abbr: user.abbr().into(),
                     color: user.color().into(),
                 },
-            })
-        }
-    }
-}
 
-async fn get_user(
-    State(AppState {
-        sources_service_client,
-        users_service_client,
-        topics_service_client,
-        ..
-    }): State<AppState>,
-    user: AppUser,
-    Path(user_id): Path<String>,
-) -> Result<AppJson<get_user::Response>, AppError> {
-    let get_source_response = sources_service_client
-        .clone()
-        .get_source(GetSourceRequest {
-            source_user_id: user_id.into(),
-            user_id: user.user_id.into(),
-        })
-        .await?
-        .into_inner();
-
-    let source_user_id = get_source_response
-        .source
-        .clone()
-        .map(|it| it.source_user_id().to_owned())
-        .ok_or(AppError::Internal)?;
-
-    let get_user_response = users_service_client
-        .clone()
-        .get_user(GetUserRequest {
-            user_id: Some(source_user_id.clone().into()),
-        })
-        .await?
-        .into_inner();
-
-    let get_topics_response = topics_service_client
-        .clone()
-        .get_topics(GetTopicsRequest {
-            user_id: Some(source_user_id.clone().into()),
-        })
-        .await?
-        .into_inner();
-
-    let topic_ids: HashSet<String> = get_topics_response
-        .topics
-        .iter()
-        .map(|it| it.topic_id().into())
-        .collect();
-
-    let get_topics_users_response = topics_service_client
-        .clone()
-        .get_topics_users(GetTopicsUsersRequest {
-            topic_ids: topic_ids.into_iter().collect(),
-            user_id: Some(source_user_id.into()),
-        })
-        .await?
-        .into_inner();
-
-    Ok(AppJson(
-        (
-            get_source_response,
-            get_user_response,
-            get_topics_response,
-            get_topics_users_response,
-        )
-            .try_into()?,
-    ))
-}
-
-mod get_user {
-    use std::collections::HashMap;
-
-    use bzd_messages_api::{GetTopicsResponse, GetTopicsUsersResponse, get_topics_response};
-    use bzd_users_api::{GetSourceResponse, GetUserResponse};
-    use serde::Serialize;
-
-    use crate::app::error::AppError;
-
-    pub type Response = Source;
-
-    #[derive(Serialize)]
-    pub struct Source {
-        pub source_id: String,
-        pub user: User,
-        pub topics: Vec<Topic>,
-    }
-
-    #[derive(Serialize)]
-    pub struct Topic {
-        pub topic_id: String,
-    }
-
-    #[derive(Serialize)]
-    pub struct User {
-        pub user_id: String,
-        pub name: String,
-        pub abbr: String,
-        pub color: String,
-    }
-
-    type Qqqq = (
-        GetSourceResponse,
-        GetUserResponse,
-        GetTopicsResponse,
-        GetTopicsUsersResponse,
-    );
-
-    type Topics = HashMap<String, get_topics_response::Topic>;
-
-    impl TryFrom<Qqqq> for Response {
-        type Error = AppError;
-
-        fn try_from(
-            (get_source_respose, get_user_response,
-            get_topics_response,
-            get_topics_users_response
-        ): Qqqq,
-        ) -> Result<Self, Self::Error> {
-            let source = get_source_respose.source.ok_or(AppError::Internal)?;
-            let user = get_user_response.user.ok_or(AppError::Internal)?;
-
-            let topics: Topics = get_topics_response
-                .topics
-                .into_iter()
-                .map(|it| (it.topic_id().into(), it))
-                .collect();
-
-            Ok(Self {
-                source_id: source.source_id().into(),
-
-                user: User {
-                    user_id: user.user_id().into(),
-                    name: user.name().into(),
-                    abbr: user.abbr().into(),
-                    color: user.color().into(),
-                },
-
-                topics: get_topics_users_response
-                    .topics_users
+                topics: topics
                     .iter()
-                    .map(|topic_user| {
-                        topics
-                            .get(topic_user.topic_id())
-                            .map(|topic| Topic {
-                                topic_id: topic.topic_id().into(),
-                            })
-                            .ok_or(AppError::Internal)
+                    .filter(|it| it.user_id() == source.source_user_id())
+                    .map(|topic| Topic {
+                        topic_id: topic.topic_id().into(),
+                        title: topic.title().into(),
+                        topic_user: topics_users.get(topic.topic_id()).map(|it| TopicUser {
+                            topic_user_id: it.topic_user_id().into(),
+                        }),
                     })
-                    .collect::<Result<Vec<Topic>, AppError>>()?,
+                    .collect(),
             })
         }
     }
