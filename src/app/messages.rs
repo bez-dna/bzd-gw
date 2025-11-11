@@ -1,10 +1,19 @@
-use axum::{Router, extract::State, routing::post};
-use bzd_messages_api::CreateMessageRequest;
+use std::collections::HashSet;
+
+use axum::{
+    Router,
+    extract::{Query, State},
+    routing::{get, post},
+};
+use bzd_messages_api::{CreateMessageRequest, GetMessagesRequest, GetUserMessagesRequest};
+use bzd_users_api::GetUsersRequest;
 
 use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/", post(create_message))
+    Router::new()
+        .route("/", post(create_message))
+        .route("/", get(get_user_messages))
 }
 
 async fn create_message(
@@ -78,6 +87,139 @@ mod create_message {
                     message_id: res.message_id().into(),
                 },
             }
+        }
+    }
+}
+
+async fn get_user_messages(
+    State(AppState {
+        messages_service_client,
+        users_service_client,
+        ..
+    }): State<AppState>,
+    user: AppUser,
+    Query(req): Query<get_user_messages::Request>,
+) -> Result<AppJson<get_user_messages::Response>, AppError> {
+    let get_user_messages = messages_service_client
+        .clone()
+        .get_user_messages(GetUserMessagesRequest {
+            user_id: user.user_id.into(),
+            cursor_message_id: req.cursor_message_id.into(),
+        })
+        .await?
+        .into_inner();
+
+    let get_messages = messages_service_client
+        .clone()
+        .get_messages(GetMessagesRequest {
+            message_ids: get_user_messages.message_ids.clone(),
+        })
+        .await?
+        .into_inner();
+
+    let user_ids: HashSet<String> = get_messages
+        .messages
+        .iter()
+        .map(|it| it.user_id().into())
+        .collect();
+
+    let get_users = users_service_client
+        .clone()
+        .get_users(GetUsersRequest {
+            user_ids: user_ids.clone().into_iter().collect(),
+        })
+        .await?
+        .into_inner();
+
+    Ok(AppJson(
+        (get_user_messages, get_messages, get_users).try_into()?,
+    ))
+}
+
+mod get_user_messages {
+    use std::collections::HashMap;
+
+    use bzd_messages_api::{GetMessagesResponse, GetUserMessagesResponse, get_messages_response};
+    use bzd_users_api::{GetUsersResponse, get_users_response};
+    use serde::{Deserialize, Serialize};
+
+    use crate::app::error::AppError;
+
+    #[derive(Deserialize)]
+    pub struct Request {
+        pub cursor_message_id: Option<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Response {
+        pub messages: Vec<Message>,
+        pub cursor_message_id: Option<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Message {
+        pub message_id: String,
+        pub text: String,
+    }
+
+    type Responses = (
+        GetUserMessagesResponse,
+        GetMessagesResponse,
+        GetUsersResponse,
+    );
+
+    type Users = HashMap<String, get_users_response::User>;
+    type Messages = HashMap<String, get_messages_response::Message>;
+
+    impl TryFrom<Responses> for Response {
+        type Error = AppError;
+
+        fn try_from(
+            (get_user_messages, get_messages, get_users): Responses,
+        ) -> Result<Self, Self::Error> {
+            let users: Users = get_users
+                .users
+                .into_iter()
+                .map(|it| (it.user_id().into(), it))
+                .collect();
+
+            let messages: Messages = get_messages
+                .messages
+                .into_iter()
+                .map(|it| (it.message_id().into(), it))
+                .collect();
+
+            Ok(Self {
+                messages: get_user_messages
+                    .message_ids
+                    .into_iter()
+                    .map(|message_id| (message_id, &messages, &users).try_into())
+                    .collect::<Result<_, _>>()?,
+                cursor_message_id: get_user_messages.cursor_message_id,
+            })
+        }
+    }
+
+    impl TryFrom<(String, &Messages, &Users)> for Message {
+        type Error = AppError;
+
+        fn try_from(
+            (message_id, messages, users): (String, &Messages, &Users),
+        ) -> Result<Self, Self::Error> {
+            let message = messages
+                .get(&message_id)
+                .ok_or(AppError::Internal)?
+                .to_owned();
+
+            let user = users
+                .get(&message.user_id().to_string())
+                .ok_or(AppError::Internal)?
+                .to_owned();
+
+            Ok(Self {
+                message_id: message.message_id().into(),
+                text: message.text().into(),
+            })
         }
     }
 }

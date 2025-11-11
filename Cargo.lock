@@ -222,10 +222,11 @@ dependencies = [
 [[package]]
 name = "bzd-messages-api"
 version = "0.0.0"
-source = "git+https://github.com/bez-dna/bzd-messages.git#aab1bd60b480ed0150b0770d56e004ce7d502e75"
+source = "git+https://github.com/bez-dna/bzd-messages.git?branch=dev#2af5a1b1ce593ffeb3d1bb29fd3aa9f3bb7196fb"
 dependencies = [
  "bzd-lib",
  "prost",
+ "prost-types",
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
