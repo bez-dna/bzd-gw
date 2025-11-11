@@ -202,7 +202,7 @@ mod get_users {
         ) -> Result<Self, Self::Error> {
             let user = users
                 .get(&contact.contact_user_id().to_string())
-                .ok_or(AppError::Internal)?
+                .ok_or(AppError::Unreachable)?
                 .to_owned();
 
             Ok(Self {
@@ -233,7 +233,7 @@ mod get_users {
         ) -> Result<Self, Self::Error> {
             let user = users
                 .get(&source.source_user_id().to_string())
-                .ok_or(AppError::Internal)?
+                .ok_or(AppError::Unreachable)?
                 .to_owned();
 
             Ok(Self {

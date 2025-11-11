@@ -144,7 +144,7 @@ mod create_topic {
         type Error = AppError;
 
         fn try_from(res: GetTopicResponse) -> Result<Self, Self::Error> {
-            let topic = res.topic.ok_or(AppError::Internal)?;
+            let topic = res.topic.ok_or(AppError::Unreachable)?;
 
             Ok(Self {
                 topic: Topic {

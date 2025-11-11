@@ -69,7 +69,7 @@ impl AppState {
             .into_bytes();
 
         let decoding_key =
-            Arc::new(DecodingKey::from_rsa_pem(&public_key).map_err(|_| AppError::Internal)?);
+            Arc::new(DecodingKey::from_rsa_pem(&public_key).map_err(|_| AppError::Unreachable)?);
 
         Ok(Self {
             settings,
