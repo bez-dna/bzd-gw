@@ -76,7 +76,7 @@ mod join {
                 verification: Verification {
                     verification_id: res
                         .verification
-                        .ok_or(AppError::Internal)?
+                        .ok_or(AppError::Unreachable)?
                         .verification_id()
                         .into(),
                 },
@@ -187,7 +187,7 @@ mod me {
         type Error = AppError;
 
         fn try_from(res: GetUserResponse) -> Result<Self, Self::Error> {
-            let user = res.user.ok_or(AppError::Internal)?;
+            let user = res.user.ok_or(AppError::Unreachable)?;
 
             Ok(Self {
                 user: Some(User {

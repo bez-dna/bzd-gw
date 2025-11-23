@@ -20,8 +20,8 @@ pub enum AppError {
     Transport(#[from] tonic::transport::Error),
     #[error("COMMON")]
     Common,
-    #[error("INTERNAL")]
-    Internal,
+    #[error("UNREACHABLE")]
+    Unreachable,
 }
 
 /*
@@ -40,7 +40,7 @@ impl IntoResponse for AppError {
                 _ => StatusCode::BAD_REQUEST,
             },
             AppError::Common | AppError::Jwt(_) | AppError::Json(_) => StatusCode::BAD_REQUEST,
-            AppError::Internal | AppError::Transport(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Unreachable | AppError::Transport(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (code, String::from("")).into_response()
@@ -55,7 +55,7 @@ impl From<ParseIntError> for AppError {
 
 impl From<Infallible> for AppError {
     fn from(_: Infallible) -> Self {
-        Self::Internal
+        Self::Unreachable
     }
 }
 
