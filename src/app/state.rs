@@ -6,7 +6,7 @@ use bzd_messages_api::{
 };
 use bzd_users_api::{
     auth_service_client::AuthServiceClient, contacts_service_client::ContactsServiceClient,
-    sources_service_client::SourcesServiceClient, users_service_client::UsersServiceClient,
+    users_service_client::UsersServiceClient,
 };
 use jsonwebtoken::DecodingKey;
 use tokio::fs;
@@ -22,7 +22,6 @@ pub struct AppState {
     pub contacts_service_client: ContactsServiceClient<Channel>,
     pub messages_service_client: MessagesServiceClient<Channel>,
     pub topics_service_client: TopicsServiceClient<Channel>,
-    pub sources_service_client: SourcesServiceClient<Channel>,
     pub decoding_key: Arc<DecodingKey>,
 }
 
@@ -43,12 +42,6 @@ impl AppState {
         let contacts_service_client = Self::create_service_client(
             settings.clients.bzd_users.endpoint.clone(),
             ContactsServiceClient::new,
-        )
-        .await?;
-
-        let sources_service_client = Self::create_service_client(
-            settings.clients.bzd_users.endpoint.clone(),
-            SourcesServiceClient::new,
         )
         .await?;
 
@@ -76,7 +69,6 @@ impl AppState {
             auth_service_client,
             users_service_client,
             contacts_service_client,
-            sources_service_client,
             messages_service_client,
             topics_service_client,
             decoding_key,

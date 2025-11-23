@@ -235,7 +235,7 @@ dependencies = [
 [[package]]
 name = "bzd-users-api"
 version = "0.0.0"
-source = "git+https://github.com/bez-dna/bzd-users.git#bc3f320785d9fbeebf31749ce42f1ea469542023"
+source = "git+https://github.com/bez-dna/bzd-users.git?branch=dev#1c7b6a38a08c059261495824b0c357fb671f3f08"
 dependencies = [
  "bzd-lib",
  "prost",
