@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use axum::{
     Router,
     extract::{Path, State},
     routing::get,
 };
+use bzd_messages_api::{GetTopicsUsersRequest, GetUserTopicsRequest};
 use bzd_users_api::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
 
 use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
@@ -11,6 +14,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(get_users))
         .route("/{user_id}", get(get_user))
+        .route("/{user_id}/topics", get(get_user_topics))
 }
 
 async fn get_users(
@@ -158,6 +162,112 @@ mod get_user {
                     color: user.color().into(),
                 },
                 topics: vec![],
+            })
+        }
+    }
+}
+
+async fn get_user_topics(
+    Path(user_id): Path<String>,
+    State(AppState {
+        topics_service_client,
+        ..
+    }): State<AppState>,
+    user: Option<AppUser>,
+) -> Result<AppJson<get_user_topics::Response>, AppError> {
+    let get_user_topics = topics_service_client
+        .clone()
+        .get_user_topics(GetUserTopicsRequest {
+            user_id: user_id.into(),
+        })
+        .await?
+        .into_inner();
+
+    let topic_ids: HashSet<String> = get_user_topics
+        .topics
+        .iter()
+        .map(|it| it.topic_id().into())
+        .collect();
+
+    let get_topics_users = topics_service_client
+        .clone()
+        .get_topics_users(GetTopicsUsersRequest {
+            topic_ids: topic_ids.into_iter().collect(),
+            user_id: if let Some(user) = user {
+                user.user_id.into()
+            } else {
+                None
+            },
+        })
+        .await?
+        .into_inner();
+
+    Ok(AppJson((get_user_topics, get_topics_users).try_into()?))
+}
+
+mod get_user_topics {
+    use std::collections::HashMap;
+
+    use bzd_messages_api::{
+        GetTopicsUsersResponse, GetUserTopicsResponse, get_topics_users_response,
+        get_user_topics_response,
+    };
+    use serde::Serialize;
+
+    use crate::app::error::AppError;
+
+    #[derive(Serialize)]
+    pub struct Response {
+        pub topics: Vec<Topic>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Topic {
+        pub topic_id: String,
+        pub title: String,
+        pub topic_user: Option<TopicUser>,
+    }
+
+    #[derive(Serialize)]
+    pub struct TopicUser {
+        pub topic_user_id: String,
+    }
+
+    type Responses = (GetUserTopicsResponse, GetTopicsUsersResponse);
+    type TopicsUsers = HashMap<String, get_topics_users_response::TopicUser>;
+
+    impl TryFrom<Responses> for Response {
+        type Error = AppError;
+
+        fn try_from((get_user_topics, get_topics_users): Responses) -> Result<Self, Self::Error> {
+            let topics_users: TopicsUsers = get_topics_users
+                .topics_users
+                .into_iter()
+                .map(|it| (it.topic_id().into(), it))
+                .collect();
+
+            Ok(Self {
+                topics: get_user_topics
+                    .topics
+                    .into_iter()
+                    .map(|it| (it, &topics_users).try_into())
+                    .collect::<Result<_, _>>()?,
+            })
+        }
+    }
+
+    impl TryFrom<(get_user_topics_response::Topic, &TopicsUsers)> for Topic {
+        type Error = AppError;
+
+        fn try_from(
+            (topic, topics_users): (get_user_topics_response::Topic, &TopicsUsers),
+        ) -> Result<Self, Self::Error> {
+            Ok(Self {
+                topic_id: topic.topic_id().into(),
+                title: topic.title().into(),
+                topic_user: topics_users.get(topic.topic_id()).map(|it| TopicUser {
+                    topic_user_id: it.topic_user_id().into(),
+                }),
             })
         }
     }
