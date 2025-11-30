@@ -264,9 +264,6 @@ mod get_user_topics {
         fn try_from(
             (topic, topics_users): (get_user_topics_response::Topic, &TopicsUsers),
         ) -> Result<Self, Self::Error> {
-            let qq = topics_users.get(topic.topic_id());
-            dbg!(&qq);
-
             Ok(Self {
                 topic_id: topic.topic_id().into(),
                 title: topic.title().into(),
