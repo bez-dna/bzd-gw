@@ -218,19 +218,21 @@ mod get_user_topics {
 
     #[derive(Serialize)]
     pub struct Response {
-        pub topics: Vec<Topic>,
+        topics: Vec<Topic>,
     }
 
     #[derive(Serialize)]
-    pub struct Topic {
-        pub topic_id: String,
-        pub title: String,
-        pub topic_user: Option<TopicUser>,
+    struct Topic {
+        topic_id: String,
+        title: String,
+        topic_user: Option<TopicUser>,
     }
 
     #[derive(Serialize)]
-    pub struct TopicUser {
-        pub topic_user_id: String,
+    struct TopicUser {
+        topic_user_id: String,
+        rate: String,
+        timing: String,
     }
 
     type Responses = (GetUserTopicsResponse, GetTopicsUsersResponse);
@@ -262,11 +264,16 @@ mod get_user_topics {
         fn try_from(
             (topic, topics_users): (get_user_topics_response::Topic, &TopicsUsers),
         ) -> Result<Self, Self::Error> {
+            let qq = topics_users.get(topic.topic_id());
+            dbg!(&qq);
+
             Ok(Self {
                 topic_id: topic.topic_id().into(),
                 title: topic.title().into(),
                 topic_user: topics_users.get(topic.topic_id()).map(|it| TopicUser {
                     topic_user_id: it.topic_user_id().into(),
+                    rate: it.rate().as_str_name().into(),
+                    timing: it.timing().as_str_name().into(),
                 }),
             })
         }

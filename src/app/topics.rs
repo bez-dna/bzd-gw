@@ -1,11 +1,11 @@
 use axum::{
     Router,
     extract::State,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use bzd_messages_api::{
     CreateTopicRequest, CreateTopicUserRequest, DeleteTopicUserRequest, GetTopicRequest,
-    GetTopicsRequest,
+    GetTopicsRequest, UpdateTopicUserRequest,
 };
 
 use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
@@ -15,6 +15,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(get_topics))
         .route("/", post(create_topic))
         .route("/users", post(create_topic_user))
+        .route("/users", patch(update_topic_user))
         .route("/users", delete(delete_topic_user))
 }
 
@@ -206,6 +207,58 @@ mod create_topic_user {
     }
 }
 
+async fn update_topic_user(
+    State(AppState {
+        topics_service_client,
+        ..
+    }): State<AppState>,
+    user: AppUser,
+    AppJson(req): AppJson<update_topic_user::Request>,
+) -> Result<AppJson<update_topic_user::Response>, AppError> {
+    let mut update_topic_user_req: UpdateTopicUserRequest = req.try_into()?;
+    update_topic_user_req.current_user_id = user.user_id.into();
+
+    topics_service_client
+        .clone()
+        .update_topic_user(update_topic_user_req)
+        .await?;
+
+    Ok(AppJson(update_topic_user::Response {}))
+}
+
+mod update_topic_user {
+    use bzd_messages_api::{Rate, Timing, UpdateTopicUserRequest};
+    use serde::{Deserialize, Serialize};
+
+    use crate::app::error::AppError;
+
+    #[derive(Deserialize, Debug)]
+    pub struct Request {
+        topic_user_id: String,
+        rate: String,
+        timing: String,
+    }
+
+    impl TryFrom<Request> for UpdateTopicUserRequest {
+        type Error = AppError;
+
+        fn try_from(req: Request) -> Result<Self, Self::Error> {
+            let rate = Rate::from_str_name(&req.rate).ok_or(AppError::Common)?;
+            let timing = Timing::from_str_name(&req.timing).ok_or(AppError::Common)?;
+
+            Ok(Self {
+                current_user_id: None,
+                topic_user_id: req.topic_user_id.into(),
+                timing: Some(timing.into()),
+                rate: Some(rate.into()),
+            })
+        }
+    }
+
+    #[derive(Serialize)]
+    pub struct Response {}
+}
+
 async fn delete_topic_user(
     State(AppState {
         topics_service_client,
@@ -231,7 +284,7 @@ mod delete_topic_user {
 
     #[derive(Deserialize)]
     pub struct Request {
-        pub topic_user_id: String,
+        topic_user_id: String,
     }
 
     impl From<Request> for DeleteTopicUserRequest {
