@@ -16,7 +16,7 @@ async fn create_contacts(
     AppJson(req): AppJson<create_contacts::Request>,
 ) -> Result<AppJson<create_contacts::Response>, AppError> {
     let mut req: CreateContactsRequest = req.into();
-    req.user_id = Some(user.user_id);
+    req.user_id = user.user_id;
 
     let res = contacts_service_client
         .clone()

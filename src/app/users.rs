@@ -173,7 +173,7 @@ async fn get_user_topics(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: Option<AppUser>,
+    user: AppUser,
 ) -> Result<AppJson<get_user_topics::Response>, AppError> {
     let get_user_topics = topics_service_client
         .clone()
@@ -193,11 +193,7 @@ async fn get_user_topics(
         .clone()
         .get_topics_users(GetTopicsUsersRequest {
             topic_ids: topic_ids.into_iter().collect(),
-            user_id: if let Some(user) = user {
-                user.user_id.into()
-            } else {
-                None
-            },
+            current_user_id: user.user_id,
         })
         .await?
         .into_inner();

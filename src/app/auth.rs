@@ -143,23 +143,16 @@ async fn me(
         users_service_client,
         ..
     }): State<AppState>,
-    user: Option<AppUser>,
+    user: AppUser,
 ) -> Result<AppJson<me::Response>, AppError> {
-    let res = match user {
-        Some(user) => {
-            let req = GetUserRequest {
-                user_id: Some(user.user_id),
-            };
-
-            users_service_client
-                .clone()
-                .get_user(req)
-                .await?
-                .into_inner()
-                .try_into()?
-        }
-        None => me::Response { user: None },
-    };
+    let res = users_service_client
+        .clone()
+        .get_user(GetUserRequest {
+            user_id: user.user_id,
+        })
+        .await?
+        .into_inner()
+        .try_into()?;
 
     Ok(AppJson(res))
 }

@@ -30,7 +30,7 @@ async fn create_message(
     AppJson(data): AppJson<create_message::Request>,
 ) -> Result<AppJson<create_message::Response>, AppError> {
     let mut req: CreateMessageRequest = data.into();
-    req.user_id = Some(user.user_id.into());
+    req.current_user_id = user.user_id;
 
     let res = messages_service_client
         .clone()
@@ -60,7 +60,7 @@ mod create_message {
         fn from(req: Request) -> Self {
             Self {
                 text: Some(req.text),
-                user_id: None,
+                current_user_id: None,
                 code: Some(req.code),
                 tp: if let Some(message_id) = req.message_id {
                     Some(Tp::Regular(Regular {

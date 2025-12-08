@@ -1,74 +1,48 @@
-use axum_extra::headers::authorization::Bearer;
-use jsonwebtoken::{Algorithm, DecodingKey, TokenData, Validation, decode};
+use axum::{
+    RequestPartsExt as _,
+    extract::{FromRef, FromRequestParts},
+    http::request::Parts,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
+use jsonwebtoken::{Algorithm, TokenData, Validation, decode};
 use serde::Deserialize;
 
-use crate::app::error::AppError;
+use crate::app::{error::AppError, state::AppState};
 
-fn jwt_2_user(bearer: Bearer, decoding_key: &DecodingKey) -> Result<AppUser, AppError> {
-    let TokenData { claims, .. } = decode::<Claims>(
-        bearer.token(),
-        decoding_key,
-        &Validation::new(Algorithm::RS256),
-    )?;
+impl<S> FromRequestParts<S> for AppUser
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
 
-    Ok(AppUser {
-        user_id: claims.sub,
-    })
-}
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let AppState { decoding_key, .. } = AppState::from_ref(state);
 
-mod jwt_2_user {
-    use axum::{
-        RequestPartsExt as _,
-        extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
-        http::request::Parts,
-    };
-    use axum_extra::{
-        TypedHeader,
-        headers::{Authorization, authorization::Bearer},
-    };
+        let bearer = parts
+            .extract::<Option<TypedHeader<Authorization<Bearer>>>>()
+            .await?
+            .map(|TypedHeader(Authorization(bearer))| bearer);
 
-    use crate::app::{
-        error::AppError,
-        state::AppState,
-        user::{AppUser, jwt_2_user},
-    };
+        let user_id = match bearer {
+            Some(bearer) => {
+                let TokenData { claims, .. } = decode::<Claims>(
+                    bearer.token(),
+                    &decoding_key,
+                    &Validation::new(Algorithm::RS256),
+                )?;
 
-    impl<S> FromRequestParts<S> for AppUser
-    where
-        AppState: FromRef<S>,
-        S: Send + Sync,
-    {
-        type Rejection = AppError;
-
-        async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-            let AppState { decoding_key, .. } = AppState::from_ref(state);
-
-            let TypedHeader(Authorization(bearer)) = parts
-                .extract::<TypedHeader<Authorization<Bearer>>>()
-                .await?;
-
-            let user = jwt_2_user(bearer, &decoding_key)?;
-
-            Ok(user)
-        }
-    }
-
-    impl<S> OptionalFromRequestParts<S> for AppUser
-    where
-        AppState: FromRef<S>,
-        S: Send + Sync,
-    {
-        type Rejection = AppError;
-
-        async fn from_request_parts(
-            parts: &mut Parts,
-            state: &S,
-        ) -> Result<Option<Self>, Self::Rejection> {
-            match <AppUser as FromRequestParts<S>>::from_request_parts(parts, state).await {
-                Ok(user) => Ok(Some(user)),
-                Err(_) => Ok(None),
+                Some(claims.sub)
             }
-        }
+            None => None,
+        };
+
+        let user = AppUser { user_id };
+
+        Ok(user)
     }
 }
 
@@ -80,5 +54,5 @@ pub struct Claims {
 
 #[derive(Deserialize, Debug)]
 pub struct AppUser {
-    pub user_id: String,
+    pub user_id: Option<String>,
 }
