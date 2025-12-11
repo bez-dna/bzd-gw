@@ -1,7 +1,7 @@
 use axum::{Router, extract::State, routing::post};
 use bzd_users_api::CreateContactsRequest;
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
+use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/", post(create_contacts))
@@ -12,7 +12,7 @@ async fn create_contacts(
         contacts_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<create_contacts::Request>,
 ) -> Result<AppJson<create_contacts::Response>, AppError> {
     let mut req: CreateContactsRequest = req.into();

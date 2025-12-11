@@ -8,7 +8,7 @@ use bzd_messages_api::{
     UpdateTopicUserRequest,
 };
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
+use crate::app::{error::AppError, json::AppJson, state::AppState, current_user::CurrentUser};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -77,7 +77,7 @@ async fn create_topic(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(data): AppJson<create_topic::Request>,
 ) -> Result<AppJson<create_topic::Response>, AppError> {
     let mut req: CreateTopicRequest = data.into();
@@ -161,7 +161,7 @@ async fn create_topic_user(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<create_topic_user::Request>,
 ) -> Result<AppJson<create_topic_user::Response>, AppError> {
     let res = topics_service_client
@@ -211,7 +211,7 @@ async fn update_topic_user(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<update_topic_user::Request>,
 ) -> Result<AppJson<update_topic_user::Response>, AppError> {
     let mut update_topic_user_req: UpdateTopicUserRequest = req.try_into()?;
@@ -263,7 +263,7 @@ async fn delete_topic_user(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<delete_topic_user::Request>,
 ) -> Result<AppJson<delete_topic_user::Response>, AppError> {
     let mut delete_topic_user_req: DeleteTopicUserRequest = req.into();

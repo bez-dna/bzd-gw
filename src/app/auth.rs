@@ -7,7 +7,7 @@ use axum::{
 };
 use bzd_users_api::{GetUserRequest, GetUserResponse};
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
+use crate::app::{error::AppError, json::AppJson, state::AppState, current_user::CurrentUser};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -143,7 +143,7 @@ async fn me(
         users_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
 ) -> Result<AppJson<me::Response>, AppError> {
     // Тут неправильно использовать GetUser, потому что теперь GetXxx это просто каноничный способ получить данные
     // о сущности, а GetMe должен получить свой метод получения инфы от текущем юзере

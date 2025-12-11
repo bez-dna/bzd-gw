@@ -6,13 +6,13 @@ use crate::app::{settings::AppSettings, state::AppState};
 
 mod auth;
 mod contacts;
+mod current_user;
 mod error;
 mod json;
 mod messages;
 mod settings;
 mod state;
 mod topics;
-mod user;
 mod users;
 
 pub async fn run() -> Result<(), Error> {

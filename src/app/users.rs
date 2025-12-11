@@ -8,7 +8,7 @@ use axum::{
 use bzd_messages_api::{GetTopicsUsersRequest, GetUserTopicsRequest};
 use bzd_users_api::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
+use crate::app::{error::AppError, json::AppJson, state::AppState, current_user::CurrentUser};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -22,7 +22,7 @@ async fn get_users(
         users_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
 ) -> Result<AppJson<get_users::Response>, AppError> {
     let get_user_users = users_service_client
         .clone()
@@ -165,7 +165,7 @@ async fn get_user_topics(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
 ) -> Result<AppJson<get_user_topics::Response>, AppError> {
     let get_user_topics = topics_service_client
         .clone()

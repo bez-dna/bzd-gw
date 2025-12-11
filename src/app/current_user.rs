@@ -12,7 +12,7 @@ use serde::Deserialize;
 
 use crate::app::{error::AppError, state::AppState};
 
-impl<S> FromRequestParts<S> for AppUser
+impl<S> FromRequestParts<S> for CurrentUser
 where
     AppState: FromRef<S>,
     S: Send + Sync,
@@ -40,7 +40,7 @@ where
             None => None,
         };
 
-        let user = AppUser { user_id };
+        let user = CurrentUser { user_id };
 
         Ok(user)
     }
@@ -53,6 +53,6 @@ pub struct Claims {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct AppUser {
+pub struct CurrentUser {
     pub user_id: Option<String>,
 }
