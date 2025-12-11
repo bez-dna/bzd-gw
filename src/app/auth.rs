@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     routing::{get, post},
 };
-use bzd_users_api::GetUserRequest;
+use bzd_users_api::{GetUserRequest, GetUserResponse};
 
 use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
 
@@ -145,16 +145,25 @@ async fn me(
     }): State<AppState>,
     user: AppUser,
 ) -> Result<AppJson<me::Response>, AppError> {
-    let res = users_service_client
-        .clone()
-        .get_user(GetUserRequest {
-            user_id: user.user_id,
-        })
-        .await?
-        .into_inner()
-        .try_into()?;
+    // Тут неправильно использовать GetUser, потому что теперь GetXxx это просто каноничный способ получить данные
+    // о сущности, а GetMe должен получить свой метод получения инфы от текущем юзере
+    // ну и конечно после GetMe не будет вызова GetUser (типа если уж быть совсем каноничным задротом),
+    // но я тут как-бы-типа-того дух стартапа держу ващет
+    // и поэтому наличие user_id гарантирует наличие корректного id текущего юзера,
+    // поэтом у сразу в GetUser (нужно переделать)
 
-    Ok(AppJson(res))
+    let res = match user.user_id {
+        Some(user_id) => users_service_client
+            .clone()
+            .get_user(GetUserRequest {
+                user_id: Some(user_id),
+            })
+            .await?
+            .into_inner(),
+        None => GetUserResponse::default(),
+    };
+
+    Ok(AppJson(res.try_into()?))
 }
 
 mod me {
@@ -180,10 +189,8 @@ mod me {
         type Error = AppError;
 
         fn try_from(res: GetUserResponse) -> Result<Self, Self::Error> {
-            let user = res.user.ok_or(AppError::Unreachable)?;
-
             Ok(Self {
-                user: Some(User {
+                user: res.user.map(|user| User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),
                     abbr: user.abbr().into(),

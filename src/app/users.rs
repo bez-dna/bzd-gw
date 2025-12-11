@@ -131,7 +131,6 @@ mod get_user {
     #[derive(Serialize)]
     pub struct Response {
         user: User,
-        topics: Vec<Topic>,
     }
 
     #[derive(Serialize)]
@@ -140,12 +139,6 @@ mod get_user {
         pub name: String,
         pub abbr: String,
         pub color: String,
-    }
-
-    #[derive(Serialize)]
-    struct Topic {
-        pub topic_id: String,
-        pub title: String,
     }
 
     impl TryFrom<GetUserResponse> for Response {
@@ -161,7 +154,6 @@ mod get_user {
                     abbr: user.abbr().into(),
                     color: user.color().into(),
                 },
-                topics: vec![],
             })
         }
     }
