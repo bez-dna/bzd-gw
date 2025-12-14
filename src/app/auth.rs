@@ -7,7 +7,7 @@ use axum::{
 };
 use bzd_users_api::{GetUserRequest, GetUserResponse};
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, current_user::CurrentUser};
+use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
