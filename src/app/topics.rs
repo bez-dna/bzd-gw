@@ -5,10 +5,10 @@ use axum::{
 };
 use bzd_messages_api::{
     CreateTopicRequest, CreateTopicUserRequest, DeleteTopicUserRequest, GetTopicRequest,
-    GetTopicsRequest, UpdateTopicUserRequest,
+    GetTopicsRequest, GetUserTopicsRequest, UpdateTopicUserRequest,
 };
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
+use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -24,24 +24,34 @@ async fn get_topics(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
 ) -> Result<AppJson<get_topics::Response>, AppError> {
-    let req = GetTopicsRequest {
-        user_ids: vec![user.user_id],
-    };
-
-    let res = topics_service_client
+    let get_user_topics_res = topics_service_client
         .clone()
-        .get_topics(req)
+        .get_user_topics(GetUserTopicsRequest {
+            user_id: user.user_id,
+        })
         .await?
         .into_inner();
 
-    Ok(AppJson(res.into()))
+    let get_topics_res = topics_service_client
+        .clone()
+        .get_topics(GetTopicsRequest {
+            topic_ids: get_user_topics_res.topic_ids.clone(),
+        })
+        .await?
+        .into_inner();
+
+    Ok(AppJson((get_user_topics_res, get_topics_res).try_into()?))
 }
 
 mod get_topics {
-    use bzd_messages_api::{GetTopicsResponse, get_topics_response};
+    use std::collections::HashMap;
+
+    use bzd_messages_api::{GetTopicsResponse, GetUserTopicsResponse};
     use serde::Serialize;
+
+    use crate::app::error::AppError;
 
     #[derive(Serialize)]
     pub struct Response {
@@ -54,20 +64,44 @@ mod get_topics {
         pub title: String,
     }
 
-    impl From<GetTopicsResponse> for Response {
-        fn from(res: GetTopicsResponse) -> Self {
-            Self {
-                topics: res.topics.into_iter().map(Into::into).collect(),
-            }
+    type Responses = (GetUserTopicsResponse, GetTopicsResponse);
+
+    type TopicId = String;
+    type Topics = HashMap<TopicId, bzd_messages_api::Topic>;
+
+    impl TryFrom<(TopicId, &Topics)> for Topic {
+        type Error = AppError;
+
+        fn try_from((topic_id, topics): (String, &Topics)) -> Result<Self, Self::Error> {
+            let topic = topics
+                .get(&topic_id)
+                .ok_or(AppError::Unreachable)?
+                .to_owned();
+
+            Ok(Self {
+                topic_id: topic.topic_id().into(),
+                title: topic.title().into(),
+            })
         }
     }
 
-    impl From<get_topics_response::Topic> for Topic {
-        fn from(topic: get_topics_response::Topic) -> Self {
-            Self {
-                topic_id: topic.topic_id().into(),
-                title: topic.title().into(),
-            }
+    impl TryFrom<Responses> for Response {
+        type Error = AppError;
+
+        fn try_from((get_user_topics_res, get_topics_res): Responses) -> Result<Self, Self::Error> {
+            let topics: Topics = get_topics_res
+                .topics
+                .into_iter()
+                .map(|it| (it.topic_id().into(), it))
+                .collect();
+
+            Ok(Self {
+                topics: get_user_topics_res
+                    .topic_ids
+                    .into_iter()
+                    .map(|it| (it, &topics).try_into())
+                    .collect::<Result<_, _>>()?,
+            })
         }
     }
 }
@@ -77,11 +111,11 @@ async fn create_topic(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(data): AppJson<create_topic::Request>,
 ) -> Result<AppJson<create_topic::Response>, AppError> {
     let mut req: CreateTopicRequest = data.into();
-    req.user_id = Some(user.user_id.clone().into());
+    req.user_id = user.user_id.clone();
 
     let create_topic_response = topics_service_client
         .clone()
@@ -102,7 +136,6 @@ async fn create_topic(
         .clone()
         .get_topic(GetTopicRequest {
             topic_id: create_topic_response.topic_id,
-            user_id: Some(user.user_id.into()),
         })
         .await?
         .into_inner();
@@ -162,14 +195,14 @@ async fn create_topic_user(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<create_topic_user::Request>,
 ) -> Result<AppJson<create_topic_user::Response>, AppError> {
     let res = topics_service_client
         .clone()
         .create_topic_user(CreateTopicUserRequest {
             topic_id: req.topic_id.into(),
-            user_id: user.user_id.into(),
+            current_user_id: user.user_id,
         })
         .await?
         .into_inner();
@@ -212,7 +245,7 @@ async fn update_topic_user(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<update_topic_user::Request>,
 ) -> Result<AppJson<update_topic_user::Response>, AppError> {
     let mut update_topic_user_req: UpdateTopicUserRequest = req.try_into()?;
@@ -264,11 +297,11 @@ async fn delete_topic_user(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(req): AppJson<delete_topic_user::Request>,
 ) -> Result<AppJson<delete_topic_user::Response>, AppError> {
     let mut delete_topic_user_req: DeleteTopicUserRequest = req.into();
-    delete_topic_user_req.user_id = user.user_id.into();
+    delete_topic_user_req.current_user_id = user.user_id;
 
     topics_service_client
         .clone()
@@ -291,7 +324,7 @@ mod delete_topic_user {
         fn from(req: Request) -> Self {
             Self {
                 topic_user_id: req.topic_user_id.into(),
-                user_id: None,
+                current_user_id: None,
             }
         }
     }

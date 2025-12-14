@@ -11,7 +11,7 @@ use bzd_messages_api::{
 };
 use bzd_users_api::GetUsersRequest;
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, user::AppUser};
+use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -26,11 +26,11 @@ async fn create_message(
         messages_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     AppJson(data): AppJson<create_message::Request>,
 ) -> Result<AppJson<create_message::Response>, AppError> {
     let mut req: CreateMessageRequest = data.into();
-    req.user_id = Some(user.user_id.into());
+    req.current_user_id = user.user_id;
 
     let res = messages_service_client
         .clone()
@@ -60,7 +60,7 @@ mod create_message {
         fn from(req: Request) -> Self {
             Self {
                 text: Some(req.text),
-                user_id: None,
+                current_user_id: None,
                 code: Some(req.code),
                 tp: if let Some(message_id) = req.message_id {
                     Some(Tp::Regular(Regular {
@@ -102,7 +102,7 @@ async fn get_user_messages(
         users_service_client,
         ..
     }): State<AppState>,
-    user: AppUser,
+    user: CurrentUser,
     Query(req): Query<get_user_messages::Request>,
 ) -> Result<AppJson<get_user_messages::Response>, AppError> {
     let get_user_messages = messages_service_client
