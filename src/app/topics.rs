@@ -1,76 +1,110 @@
 use axum::{
     Router,
     extract::State,
-    routing::{delete, patch, post},
+    routing::{delete, get, patch, post},
 };
 use bzd_messages_api::{
     CreateTopicRequest, CreateTopicUserRequest, DeleteTopicUserRequest, GetTopicRequest,
-    UpdateTopicUserRequest,
+    GetTopicsRequest, GetUserTopicsRequest, UpdateTopicUserRequest,
 };
 
-use crate::app::{error::AppError, json::AppJson, state::AppState, current_user::CurrentUser};
+use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        // .route("/", get(get_topics))
+        .route("/", get(get_topics))
         .route("/", post(create_topic))
         .route("/users", post(create_topic_user))
         .route("/users", patch(update_topic_user))
         .route("/users", delete(delete_topic_user))
 }
 
-// async fn get_topics(
-//     State(AppState {
-//         topics_service_client,
-//         ..
-//     }): State<AppState>,
-//     user: AppUser,
-// ) -> Result<AppJson<get_topics::Response>, AppError> {
-//     let req = GetTopicsRequest {
-//         user_ids: vec![user.user_id],
-//     };
+async fn get_topics(
+    State(AppState {
+        topics_service_client,
+        ..
+    }): State<AppState>,
+    user: CurrentUser,
+) -> Result<AppJson<get_topics::Response>, AppError> {
+    let get_user_topics_res = topics_service_client
+        .clone()
+        .get_user_topics(GetUserTopicsRequest {
+            user_id: user.user_id,
+        })
+        .await?
+        .into_inner();
 
-//     let res = topics_service_client
-//         .clone()
-//         .get_topics(req)
-//         .await?
-//         .into_inner();
+    let get_topics_res = topics_service_client
+        .clone()
+        .get_topics(GetTopicsRequest {
+            topic_ids: get_user_topics_res.topic_ids.clone(),
+        })
+        .await?
+        .into_inner();
 
-//     Ok(AppJson(res.into()))
-// }
+    Ok(AppJson((get_user_topics_res, get_topics_res).try_into()?))
+}
 
-// mod get_topics {
-//     use bzd_messages_api::{GetTopicsResponse, get_topics_response};
-//     use serde::Serialize;
+mod get_topics {
+    use std::collections::HashMap;
 
-//     #[derive(Serialize)]
-//     pub struct Response {
-//         pub topics: Vec<Topic>,
-//     }
+    use bzd_messages_api::{GetTopicsResponse, GetUserTopicsResponse};
+    use serde::Serialize;
 
-//     #[derive(Serialize)]
-//     pub struct Topic {
-//         pub topic_id: String,
-//         pub title: String,
-//     }
+    use crate::app::error::AppError;
 
-//     impl From<GetTopicsResponse> for Response {
-//         fn from(res: GetTopicsResponse) -> Self {
-//             Self {
-//                 topics: res.topics.into_iter().map(Into::into).collect(),
-//             }
-//         }
-//     }
+    #[derive(Serialize)]
+    pub struct Response {
+        pub topics: Vec<Topic>,
+    }
 
-//     impl From<get_topics_response::Topic> for Topic {
-//         fn from(topic: get_topics_response::Topic) -> Self {
-//             Self {
-//                 topic_id: topic.topic_id().into(),
-//                 title: topic.title().into(),
-//             }
-//         }
-//     }
-// }
+    #[derive(Serialize)]
+    pub struct Topic {
+        pub topic_id: String,
+        pub title: String,
+    }
+
+    type Responses = (GetUserTopicsResponse, GetTopicsResponse);
+
+    type TopicId = String;
+    type Topics = HashMap<TopicId, bzd_messages_api::Topic>;
+
+    impl TryFrom<(TopicId, &Topics)> for Topic {
+        type Error = AppError;
+
+        fn try_from((topic_id, topics): (String, &Topics)) -> Result<Self, Self::Error> {
+            let topic = topics
+                .get(&topic_id)
+                .ok_or(AppError::Unreachable)?
+                .to_owned();
+
+            Ok(Self {
+                topic_id: topic.topic_id().into(),
+                title: topic.title().into(),
+            })
+        }
+    }
+
+    impl TryFrom<Responses> for Response {
+        type Error = AppError;
+
+        fn try_from((get_user_topics_res, get_topics_res): Responses) -> Result<Self, Self::Error> {
+            let topics: Topics = get_topics_res
+                .topics
+                .into_iter()
+                .map(|it| (it.topic_id().into(), it))
+                .collect();
+
+            Ok(Self {
+                topics: get_user_topics_res
+                    .topic_ids
+                    .into_iter()
+                    .map(|it| (it, &topics).try_into())
+                    .collect::<Result<_, _>>()?,
+            })
+        }
+    }
+}
 
 async fn create_topic(
     State(AppState {
