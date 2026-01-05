@@ -3,8 +3,8 @@ use axum::{
     extract::{Path, State},
     routing::get,
 };
-use bzd_messages_api::{GetTopicsRequest, GetTopicsUsersRequest, GetUserTopicsRequest};
-use bzd_users_api::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
+use bzd_messages_api::topics::{GetTopicsRequest, GetTopicsUsersRequest, GetUserTopicsRequest};
+use bzd_users_api::users::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
@@ -44,7 +44,7 @@ async fn get_users(
 mod get_users {
     use std::collections::HashMap;
 
-    use bzd_users_api::{GetUserUsersResponse, GetUsersResponse, get_users_response};
+    use bzd_users_api::users::{GetUserUsersResponse, GetUsersResponse, get_users_response};
     use serde::Serialize;
 
     use crate::app::error::AppError;
@@ -121,7 +121,7 @@ async fn get_user(
 }
 
 mod get_user {
-    use bzd_users_api::GetUserResponse;
+    use bzd_users_api::users::GetUserResponse;
     use serde::Serialize;
 
     use crate::app::error::AppError;
@@ -198,7 +198,7 @@ async fn get_user_topics(
 mod get_user_topics {
     use std::collections::HashMap;
 
-    use bzd_messages_api::{
+    use bzd_messages_api::topics::{
         GetTopicsResponse, GetTopicsUsersResponse, GetUserTopicsResponse, get_topics_users_response,
     };
     use serde::Serialize;
@@ -233,7 +233,7 @@ mod get_user_topics {
     type TopicId = String;
     type TopicUserId = String;
     type TopicsUsers = HashMap<TopicUserId, get_topics_users_response::TopicUser>;
-    type Topics = HashMap<TopicId, bzd_messages_api::Topic>;
+    type Topics = HashMap<TopicId, bzd_messages_api::topics::Topic>;
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
