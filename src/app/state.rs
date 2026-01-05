@@ -2,11 +2,13 @@ use std::sync::Arc;
 
 use bzd_lib::error::Error;
 use bzd_messages_api::{
-    messages_service_client::MessagesServiceClient, topics_service_client::TopicsServiceClient,
+    messages::messages_service_client::MessagesServiceClient,
+    topics::topics_service_client::TopicsServiceClient,
 };
 use bzd_users_api::{
-    auth_service_client::AuthServiceClient, contacts_service_client::ContactsServiceClient,
-    users_service_client::UsersServiceClient,
+    auth::auth_service_client::AuthServiceClient,
+    contacts::contacts_service_client::ContactsServiceClient,
+    users::users_service_client::UsersServiceClient,
 };
 use jsonwebtoken::DecodingKey;
 use tokio::fs;
@@ -16,7 +18,7 @@ use crate::app::{error::AppError, settings::AppSettings};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub settings: AppSettings,
+    // pub settings: AppSettings,
     pub auth_service_client: AuthServiceClient<Channel>,
     pub users_service_client: UsersServiceClient<Channel>,
     pub contacts_service_client: ContactsServiceClient<Channel>,
@@ -65,7 +67,7 @@ impl AppState {
             Arc::new(DecodingKey::from_rsa_pem(&public_key).map_err(|_| AppError::Unreachable)?);
 
         Ok(Self {
-            settings,
+            // settings,
             auth_service_client,
             users_service_client,
             contacts_service_client,

@@ -3,7 +3,7 @@ use axum::{
     extract::State,
     routing::{delete, get, patch, post},
 };
-use bzd_messages_api::{
+use bzd_messages_api::topics::{
     CreateTopicRequest, CreateTopicUserRequest, DeleteTopicUserRequest, GetTopicRequest,
     GetTopicsRequest, GetUserTopicsRequest, UpdateTopicUserRequest,
 };
@@ -48,7 +48,7 @@ async fn get_topics(
 mod get_topics {
     use std::collections::HashMap;
 
-    use bzd_messages_api::{GetTopicsResponse, GetUserTopicsResponse};
+    use bzd_messages_api::topics::{GetTopicsResponse, GetUserTopicsResponse};
     use serde::Serialize;
 
     use crate::app::error::AppError;
@@ -67,7 +67,7 @@ mod get_topics {
     type Responses = (GetUserTopicsResponse, GetTopicsResponse);
 
     type TopicId = String;
-    type Topics = HashMap<TopicId, bzd_messages_api::Topic>;
+    type Topics = HashMap<TopicId, bzd_messages_api::topics::Topic>;
 
     impl TryFrom<(TopicId, &Topics)> for Topic {
         type Error = AppError;
@@ -144,7 +144,7 @@ async fn create_topic(
 }
 
 mod create_topic {
-    use bzd_messages_api::{CreateTopicRequest, GetTopicResponse};
+    use bzd_messages_api::topics::{CreateTopicRequest, GetTopicResponse};
     use serde::{Deserialize, Serialize};
 
     use crate::app::error::AppError;
@@ -211,7 +211,7 @@ async fn create_topic_user(
 }
 
 mod create_topic_user {
-    use bzd_messages_api::CreateTopicUserResponse;
+    use bzd_messages_api::topics::CreateTopicUserResponse;
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize)]
@@ -260,7 +260,7 @@ async fn update_topic_user(
 }
 
 mod update_topic_user {
-    use bzd_messages_api::{Rate, Timing, UpdateTopicUserRequest};
+    use bzd_messages_api::topics::{Rate, Timing, UpdateTopicUserRequest};
     use serde::{Deserialize, Serialize};
 
     use crate::app::error::AppError;
@@ -312,7 +312,7 @@ async fn delete_topic_user(
 }
 
 mod delete_topic_user {
-    use bzd_messages_api::DeleteTopicUserRequest;
+    use bzd_messages_api::topics::DeleteTopicUserRequest;
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize)]

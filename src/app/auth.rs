@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     routing::{get, post},
 };
-use bzd_users_api::{GetUserRequest, GetUserResponse};
+use bzd_users_api::users::{GetUserRequest, GetUserResponse};
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
@@ -23,7 +23,7 @@ async fn join(
     }): State<AppState>,
     AppJson(data): AppJson<join::Request>,
 ) -> Result<AppJson<join::Response>, AppError> {
-    let request: bzd_users_api::JoinRequest = data.try_into()?;
+    let request: bzd_users_api::auth::JoinRequest = data.try_into()?;
 
     let response = auth_service_client
         .clone()
@@ -35,7 +35,7 @@ async fn join(
 }
 
 mod join {
-    use bzd_users_api::JoinResponse;
+    use bzd_users_api::auth::JoinResponse;
     use serde::{Deserialize, Serialize};
 
     use crate::app::error::AppError;
@@ -45,7 +45,7 @@ mod join {
         pub phone_number: String,
     }
 
-    impl TryFrom<Request> for bzd_users_api::JoinRequest {
+    impl TryFrom<Request> for bzd_users_api::auth::JoinRequest {
         type Error = AppError;
 
         fn try_from(req: Request) -> Result<Self, Self::Error> {
@@ -92,7 +92,7 @@ async fn complete(
     }): State<AppState>,
     AppJson(data): AppJson<complete::Request>,
 ) -> Result<AppJson<complete::Response>, AppError> {
-    let request: bzd_users_api::CompleteRequest = data.into();
+    let request: bzd_users_api::auth::CompleteRequest = data.into();
 
     let response = auth_service_client
         .clone()
@@ -104,7 +104,7 @@ async fn complete(
 }
 
 mod complete {
-    use bzd_users_api::{CompleteRequest, CompleteResponse};
+    use bzd_users_api::auth::{CompleteRequest, CompleteResponse};
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize)]
@@ -167,7 +167,7 @@ async fn me(
 }
 
 mod me {
-    use bzd_users_api::GetUserResponse;
+    use bzd_users_api::users::GetUserResponse;
     use serde::Serialize;
 
     use crate::app::error::AppError;

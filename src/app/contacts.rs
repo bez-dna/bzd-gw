@@ -1,5 +1,5 @@
 use axum::{Router, extract::State, routing::post};
-use bzd_users_api::CreateContactsRequest;
+use bzd_users_api::contacts::CreateContactsRequest;
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
@@ -28,7 +28,9 @@ async fn create_contacts(
 }
 
 mod create_contacts {
-    use bzd_users_api::{CreateContactsRequest, CreateContactsResponse, create_contacts_request};
+    use bzd_users_api::contacts::{
+        CreateContactsRequest, CreateContactsResponse, create_contacts_request,
+    };
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize)]

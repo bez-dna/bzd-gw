@@ -1,5 +1,8 @@
 use axum::{Router, routing::get};
-use bzd_lib::{error::Error, settings::Settings as _};
+use bzd_lib::{
+    error::Error,
+    settings::{HttpSettings, Settings as _},
+};
 use tracing::info;
 
 use crate::app::{settings::AppSettings, state::AppState};
@@ -17,14 +20,14 @@ mod users;
 
 pub async fn run() -> Result<(), Error> {
     let settings = AppSettings::new()?;
-    let state = AppState::new(settings).await?;
+    let state = AppState::new(settings.clone()).await?;
 
-    http(&state).await?;
+    http(&state, &settings.http).await?;
 
     Ok(())
 }
 
-async fn http(state: &AppState) -> Result<(), Error> {
+async fn http(state: &AppState, settings: &HttpSettings) -> Result<(), Error> {
     let router = Router::new()
         .nest(
             "/api",
@@ -38,7 +41,7 @@ async fn http(state: &AppState) -> Result<(), Error> {
         )
         .with_state(state.to_owned());
 
-    let listener = tokio::net::TcpListener::bind(&state.settings.http.endpoint).await?;
+    let listener = tokio::net::TcpListener::bind(&settings.endpoint).await?;
 
     info!("app: started on {}", listener.local_addr()?);
     axum::serve(listener, router).await?;

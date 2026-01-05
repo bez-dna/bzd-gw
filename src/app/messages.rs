@@ -5,11 +5,11 @@ use axum::{
     extract::{Path, Query, State},
     routing::{get, post},
 };
-use bzd_messages_api::{
+use bzd_messages_api::messages::{
     CreateMessageRequest, GetMessageMessagesRequest, GetMessageRequest, GetMessagesRequest,
     GetUserMessagesRequest,
 };
-use bzd_users_api::GetUsersRequest;
+use bzd_users_api::users::GetUsersRequest;
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
@@ -42,7 +42,7 @@ async fn create_message(
 }
 
 mod create_message {
-    use bzd_messages_api::{
+    use bzd_messages_api::messages::{
         CreateMessageRequest, CreateMessageResponse,
         create_message_request::{Regular, Starting, Tp},
     };
@@ -144,8 +144,10 @@ async fn get_user_messages(
 mod get_user_messages {
     use std::collections::HashMap;
 
-    use bzd_messages_api::{GetMessagesResponse, GetUserMessagesResponse, get_messages_response};
-    use bzd_users_api::{GetUsersResponse, get_users_response};
+    use bzd_messages_api::messages::{
+        GetMessagesResponse, GetUserMessagesResponse, get_messages_response,
+    };
+    use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
 
     use crate::app::error::AppError;
@@ -263,7 +265,7 @@ async fn get_message(
 }
 
 mod get_message {
-    use bzd_messages_api::GetMessageResponse;
+    use bzd_messages_api::messages::GetMessageResponse;
     use serde::Serialize;
 
     use crate::app::error::AppError;
@@ -343,10 +345,10 @@ async fn get_message_messages(
 mod get_message_messages {
     use std::collections::HashMap;
 
-    use bzd_messages_api::{
+    use bzd_messages_api::messages::{
         GetMessageMessagesResponse, GetMessagesResponse, get_messages_response,
     };
-    use bzd_users_api::{GetUsersResponse, get_users_response};
+    use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
 
     use crate::app::error::AppError;
