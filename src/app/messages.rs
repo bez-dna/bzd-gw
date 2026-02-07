@@ -5,9 +5,10 @@ use axum::{
     extract::{Path, Query, State},
     routing::{get, post},
 };
+use bzd_feeds_api::feeds::GetUserEntriesRequest;
 use bzd_messages_api::messages::{
     CreateMessageRequest, GetMessageMessagesRequest, GetMessageRequest, GetMessagesRequest,
-    GetUserMessagesRequest,
+    GetStreamsRequest,
 };
 use bzd_users_api::users::GetUsersRequest;
 
@@ -16,7 +17,7 @@ use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, stat
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_message))
-        .route("/", get(get_user_messages))
+        .route("/", get(get_feed_messages))
         .route("/{message_id}", get(get_message))
         .route("/{message_id}/messages", get(get_message_messages))
 }
@@ -42,10 +43,7 @@ async fn create_message(
 }
 
 mod create_message {
-    use bzd_messages_api::messages::{
-        CreateMessageRequest, CreateMessageResponse,
-        create_message_request::{Regular, Starting, Tp},
-    };
+    use bzd_messages_api::messages::{CreateMessageRequest, CreateMessageResponse};
     use serde::{Deserialize, Serialize};
 
     #[derive(Deserialize)]
@@ -53,7 +51,6 @@ mod create_message {
         pub text: String,
         pub code: String,
         pub message_id: Option<String>,
-        pub topic_ids: Option<Vec<String>>,
     }
 
     impl From<Request> for CreateMessageRequest {
@@ -62,15 +59,7 @@ mod create_message {
                 text: Some(req.text),
                 current_user_id: None,
                 code: Some(req.code),
-                tp: if let Some(message_id) = req.message_id {
-                    Some(Tp::Regular(Regular {
-                        message_id: Some(message_id),
-                    }))
-                } else if let Some(topic_ids) = req.topic_ids {
-                    Some(Tp::Starting(Starting { topic_ids }))
-                } else {
-                    None
-                },
+                message_id: req.message_id,
             }
         }
     }
@@ -96,39 +85,42 @@ mod create_message {
     }
 }
 
-async fn get_user_messages(
+async fn get_feed_messages(
     State(AppState {
         messages_service_client,
         users_service_client,
+        feeds,
         ..
     }): State<AppState>,
     user: CurrentUser,
-    Query(req): Query<get_user_messages::Request>,
-) -> Result<AppJson<get_user_messages::Response>, AppError> {
-    let get_user_messages = messages_service_client
+    Query(req): Query<get_feed_messages::Request>,
+) -> Result<AppJson<get_feed_messages::Response>, AppError> {
+    // sleep(Duration::from_secs(1)).await;
+
+    let get_user_entries_res = feeds
         .clone()
-        .get_user_messages(GetUserMessagesRequest {
+        .get_user_entries(GetUserEntriesRequest {
             user_id: user.user_id.into(),
-            cursor_message_id: req.cursor_message_id.into(),
+            cursor_entry_id: req.cursor_message_id.into(),
         })
         .await?
         .into_inner();
 
-    let get_messages = messages_service_client
+    let get_messages_res = messages_service_client
         .clone()
         .get_messages(GetMessagesRequest {
-            message_ids: get_user_messages.message_ids.clone(),
+            message_ids: get_user_entries_res.message_ids.clone(),
         })
         .await?
         .into_inner();
 
-    let user_ids: HashSet<String> = get_messages
+    let user_ids: HashSet<String> = get_messages_res
         .messages
         .iter()
         .map(|it| it.user_id().into())
         .collect();
 
-    let get_users = users_service_client
+    let get_users_res = users_service_client
         .clone()
         .get_users(GetUsersRequest {
             user_ids: user_ids.clone().into_iter().collect(),
@@ -137,16 +129,15 @@ async fn get_user_messages(
         .into_inner();
 
     Ok(AppJson(
-        (get_user_messages, get_messages, get_users).try_into()?,
+        (get_user_entries_res, get_messages_res, get_users_res).try_into()?,
     ))
 }
 
-mod get_user_messages {
+mod get_feed_messages {
     use std::collections::HashMap;
 
-    use bzd_messages_api::messages::{
-        GetMessagesResponse, GetUserMessagesResponse, get_messages_response,
-    };
+    use bzd_feeds_api::feeds::GetUserEntriesResponse;
+    use bzd_messages_api::messages::{GetMessagesResponse, get_messages_response};
     use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
 
@@ -179,7 +170,7 @@ mod get_user_messages {
     }
 
     type Responses = (
-        GetUserMessagesResponse,
+        GetUserEntriesResponse,
         GetMessagesResponse,
         GetUsersResponse,
     );
@@ -191,7 +182,7 @@ mod get_user_messages {
         type Error = AppError;
 
         fn try_from(
-            (get_user_messages, get_messages, get_users): Responses,
+            (get_user_entries, get_messages, get_users): Responses,
         ) -> Result<Self, Self::Error> {
             let users: Users = get_users
                 .users
@@ -206,12 +197,12 @@ mod get_user_messages {
                 .collect();
 
             Ok(Self {
-                messages: get_user_messages
+                messages: get_user_entries
                     .message_ids
                     .into_iter()
                     .map(|message_id| (message_id, &messages, &users).try_into())
                     .collect::<Result<_, _>>()?,
-                cursor_message_id: get_user_messages.cursor_message_id,
+                cursor_message_id: get_user_entries.cursor_entry_id,
             })
         }
     }
@@ -323,10 +314,25 @@ async fn get_message_messages(
         .await?
         .into_inner();
 
+    let get_streams = messages_service_client
+        .clone()
+        .get_streams(GetStreamsRequest {
+            message_ids: get_message_messages.message_ids.clone(),
+        })
+        .await?
+        .into_inner();
+
     let user_ids: HashSet<String> = get_messages
         .messages
         .iter()
         .map(|it| it.user_id().into())
+        .chain(
+            get_streams
+                .streams
+                .iter()
+                .flat_map(|it| it.user_ids.clone())
+                .collect::<Vec<_>>(),
+        )
         .collect();
 
     let get_users = users_service_client
@@ -338,7 +344,7 @@ async fn get_message_messages(
         .into_inner();
 
     Ok(AppJson(
-        (get_message_messages, get_messages, get_users).try_into()?,
+        (get_message_messages, get_messages, get_users, get_streams).try_into()?,
     ))
 }
 
@@ -346,7 +352,8 @@ mod get_message_messages {
     use std::collections::HashMap;
 
     use bzd_messages_api::messages::{
-        GetMessageMessagesResponse, GetMessagesResponse, get_messages_response,
+        GetMessageMessagesResponse, GetMessagesResponse, GetStreamsResponse, get_messages_response,
+        get_streams_response,
     };
     use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
@@ -369,6 +376,7 @@ mod get_message_messages {
         pub message_id: String,
         pub text: String,
         pub user: User,
+        pub stream: Option<Stream>,
     }
 
     #[derive(Serialize)]
@@ -379,25 +387,42 @@ mod get_message_messages {
         pub color: String,
     }
 
+    #[derive(Serialize)]
+    pub struct Stream {
+        pub stream_id: String,
+        pub message_id: String,
+        pub text: String,
+        pub messages_count: i64,
+        pub users: Vec<User>,
+    }
+
     type Responses = (
         GetMessageMessagesResponse,
         GetMessagesResponse,
         GetUsersResponse,
+        GetStreamsResponse,
     );
 
     type Users = HashMap<String, get_users_response::User>;
     type Messages = HashMap<String, get_messages_response::Message>;
+    type Streams = HashMap<String, get_streams_response::Stream>;
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
 
         fn try_from(
-            (get_message_messages, get_messages, get_users): Responses,
+            (get_message_messages, get_messages, get_users, get_streams): Responses,
         ) -> Result<Self, Self::Error> {
             let users: Users = get_users
                 .users
                 .into_iter()
                 .map(|it| (it.user_id().into(), it))
+                .collect();
+
+            let streams: Streams = get_streams
+                .streams
+                .into_iter()
+                .map(|it| (it.message_id().into(), it))
                 .collect();
 
             let messages: Messages = get_messages
@@ -410,28 +435,26 @@ mod get_message_messages {
                 messages: get_message_messages
                     .message_ids
                     .into_iter()
-                    .map(|message_id| (message_id, &messages, &users).try_into())
+                    .map(|message_id| (message_id, &messages, &users, &streams).try_into())
                     .collect::<Result<_, _>>()?,
                 cursor_message_id: get_message_messages.cursor_message_id,
             })
         }
     }
 
-    impl TryFrom<(String, &Messages, &Users)> for Message {
+    impl TryFrom<(String, &Messages, &Users, &Streams)> for Message {
         type Error = AppError;
 
         fn try_from(
-            (message_id, messages, users): (String, &Messages, &Users),
+            (message_id, messages, users, streams): (String, &Messages, &Users, &Streams),
         ) -> Result<Self, Self::Error> {
-            let message = messages
-                .get(&message_id)
-                .ok_or(AppError::Unreachable)?
-                .to_owned();
+            let message = messages.get(&message_id).ok_or(AppError::Unreachable)?;
 
             let user = users
                 .get(&message.user_id().to_string())
-                .ok_or(AppError::Unreachable)?
-                .to_owned();
+                .ok_or(AppError::Unreachable)?;
+
+            let stream = streams.get(&message.message_id().to_string());
 
             Ok(Self {
                 message_id: message.message_id().into(),
@@ -442,6 +465,44 @@ mod get_message_messages {
                     abbr: user.abbr().into(),
                     color: user.color().into(),
                 },
+                stream: stream
+                    .map(|stream| (stream, users).try_into())
+                    .transpose()?,
+            })
+        }
+    }
+
+    impl TryFrom<(&get_streams_response::Stream, &Users)> for Stream {
+        type Error = AppError;
+
+        fn try_from(
+            (stream, users): (&get_streams_response::Stream, &Users),
+        ) -> Result<Self, Self::Error> {
+            Ok(Stream {
+                stream_id: stream.stream_id().into(),
+                message_id: stream.message_id().into(),
+                text: stream.text().into(),
+                messages_count: stream.messages_count(),
+                users: stream
+                    .user_ids
+                    .iter()
+                    .map(|user_id| (user_id, users).try_into())
+                    .collect::<Result<_, _>>()?,
+            })
+        }
+    }
+
+    impl TryFrom<(&String, &Users)> for User {
+        type Error = AppError;
+
+        fn try_from((user_id, users): (&String, &Users)) -> Result<Self, Self::Error> {
+            let user = users.get(user_id).ok_or(AppError::Unreachable)?;
+
+            Ok(User {
+                user_id: user.user_id().into(),
+                name: user.name().into(),
+                abbr: user.abbr().into(),
+                color: user.color().into(),
             })
         }
     }
