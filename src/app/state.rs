@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bzd_feeds_api::feeds::feeds_service_client::FeedsServiceClient;
 use bzd_lib::error::Error;
 use bzd_messages_api::{
     messages::messages_service_client::MessagesServiceClient,
@@ -24,6 +25,7 @@ pub struct AppState {
     pub contacts_service_client: ContactsServiceClient<Channel>,
     pub messages_service_client: MessagesServiceClient<Channel>,
     pub topics_service_client: TopicsServiceClient<Channel>,
+    pub feeds: FeedsServiceClient<Channel>,
     pub decoding_key: Arc<DecodingKey>,
 }
 
@@ -59,6 +61,12 @@ impl AppState {
         )
         .await?;
 
+        let feeds = Self::create_service_client(
+            settings.clients.bzd_feeds.endpoint.clone(),
+            FeedsServiceClient::new,
+        )
+        .await?;
+
         let public_key = fs::read_to_string(&settings.auth.public_key_file)
             .await?
             .into_bytes();
@@ -73,6 +81,7 @@ impl AppState {
             contacts_service_client,
             messages_service_client,
             topics_service_client,
+            feeds,
             decoding_key,
         })
     }

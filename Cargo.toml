@@ -11,15 +11,15 @@ bzd-feeds-api = { git = "https://github.com/bez-dna/bzd-feeds.git" }
 axum = { version = "0.8.8", features = ["macros"] }
 axum-extra = { version = "0.12.5", features = ["typed-header"] }
 
-prost = "0.14.1"
-tonic = { version = "0.14.2", default-features = false, features = ["channel"] }
+prost = "0.14.3"
+tonic = { version = "0.14.3", default-features = false, features = ["channel"] }
 
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.148"
+serde_json = "1.0.149"
 
 tokio = { version = "1.49.0", features = ["full"] }
 
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 tracing = "0.1.44"
 config = { version = "0.15.19", features = ["toml"] }
-jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
