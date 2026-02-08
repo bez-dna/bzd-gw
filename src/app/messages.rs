@@ -243,11 +243,13 @@ async fn get_message(
         messages_service_client,
         ..
     }): State<AppState>,
+    user: CurrentUser,
 ) -> Result<AppJson<get_message::Response>, AppError> {
     let get_message = messages_service_client
         .clone()
         .get_message(GetMessageRequest {
             message_id: message_id.into(),
+            current_user_id: user.user_id,
         })
         .await?
         .into_inner();
@@ -270,6 +272,12 @@ mod get_message {
     struct Message {
         message_id: String,
         text: String,
+        permissions: Permissions,
+    }
+
+    #[derive(Serialize)]
+    struct Permissions {
+        topics: bool,
     }
 
     impl TryFrom<GetMessageResponse> for Response {
@@ -282,6 +290,9 @@ mod get_message {
                 message: Message {
                     message_id: message.message_id().into(),
                     text: message.text().into(),
+                    permissions: Permissions {
+                        topics: message.permissions.is_some_and(|p| p.topics()),
+                    },
                 },
             })
         }
