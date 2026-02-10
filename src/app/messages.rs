@@ -683,8 +683,6 @@ async fn delete_message_topic(
     user: CurrentUser,
     AppJson(req): AppJson<delete_message_topic::Request>,
 ) -> Result<AppJson<delete_message_topic::Response>, AppError> {
-    dbg!("QQQ");
-
     let res = messages_service_client
         .clone()
         .delete_message_topic(DeleteMessageTopicRequest {
