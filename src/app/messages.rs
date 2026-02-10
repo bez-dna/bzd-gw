@@ -3,13 +3,14 @@ use std::collections::HashSet;
 use axum::{
     Router,
     extract::{Path, Query, State},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use bzd_feeds_api::feeds::GetUserEntriesRequest;
 use bzd_messages_api::{
     messages::{
-        CreateMessageRequest, CreateMessageTopicRequest, GetMessageMessagesRequest,
-        GetMessageRequest, GetMessagesRequest, GetMessagesTopicsRequest, GetStreamsRequest,
+        CreateMessageRequest, CreateMessageTopicRequest, DeleteMessageTopicRequest,
+        GetMessageMessagesRequest, GetMessageRequest, GetMessagesRequest, GetMessagesTopicsRequest,
+        GetStreamsRequest,
     },
     topics::{GetTopicsRequest, GetUserTopicsRequest},
 };
@@ -25,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/{message_id}/messages", get(get_message_messages))
         .route("/{message_id}/topics", get(get_message_topics))
         .route("/topics", post(create_message_topic))
+        .route("/topics", delete(delete_message_topic))
 }
 
 async fn create_message(
@@ -669,6 +671,47 @@ mod create_message_topic {
                     message_topic_id: res.message_topic_id().into(),
                 },
             }
+        }
+    }
+}
+
+async fn delete_message_topic(
+    State(AppState {
+        messages_service_client,
+        ..
+    }): State<AppState>,
+    user: CurrentUser,
+    AppJson(req): AppJson<delete_message_topic::Request>,
+) -> Result<AppJson<delete_message_topic::Response>, AppError> {
+    dbg!("QQQ");
+
+    let res = messages_service_client
+        .clone()
+        .delete_message_topic(DeleteMessageTopicRequest {
+            current_user_id: user.user_id,
+            message_topic_id: Some(req.message_topic_id),
+        })
+        .await?
+        .into_inner();
+
+    Ok(AppJson(res.into()))
+}
+
+mod delete_message_topic {
+    use bzd_messages_api::messages::DeleteMessageTopicResponse;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize)]
+    pub struct Request {
+        pub message_topic_id: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct Response {}
+
+    impl From<DeleteMessageTopicResponse> for Response {
+        fn from(_: DeleteMessageTopicResponse) -> Self {
+            Self {}
         }
     }
 }
