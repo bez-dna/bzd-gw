@@ -3,11 +3,14 @@ use std::collections::HashSet;
 use axum::{
     Router,
     extract::{Path, Query, State},
-    routing::get,
+    routing::{delete, get, post},
 };
 use bzd_messages_api::{
     messages::{GetMessagesRequest, GetUserMessagesRequest},
-    topics::{GetTopicsRequest, GetTopicsUsersRequest, GetUserTopicsRequest},
+    topics::{
+        CreateTopicUserRequest, DeleteTopicUserRequest, GetTopicsRequest, GetTopicsUsersRequest,
+        GetUserTopicsRequest,
+    },
 };
 use bzd_users_api::users::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
 
@@ -18,6 +21,8 @@ pub fn router() -> Router<AppState> {
         .route("/", get(get_users))
         .route("/{user_id}", get(get_user))
         .route("/{user_id}/topics", get(get_user_topics))
+        .route("/topics", post(create_user_topic))
+        .route("/topics", delete(delete_user_topic))
         .route("/{user_id}/messages", get(get_user_messages))
 }
 
@@ -287,6 +292,97 @@ mod get_user_topics {
             })
         }
     }
+}
+
+async fn create_user_topic(
+    State(AppState {
+        topics_service_client,
+        ..
+    }): State<AppState>,
+    user: CurrentUser,
+    AppJson(req): AppJson<create_user_topic::Request>,
+) -> Result<AppJson<create_user_topic::Response>, AppError> {
+    let res = topics_service_client
+        .clone()
+        .create_topic_user(CreateTopicUserRequest {
+            topic_id: req.topic_id.into(),
+            current_user_id: user.user_id,
+        })
+        .await?
+        .into_inner();
+
+    Ok(AppJson(res.try_into()?))
+}
+
+mod create_user_topic {
+    use bzd_messages_api::topics::CreateTopicUserResponse;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize)]
+    pub struct Request {
+        pub topic_id: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct Response {
+        pub topic_user: TopicUser,
+    }
+
+    #[derive(Serialize)]
+    pub struct TopicUser {
+        pub topic_user_id: String,
+    }
+
+    impl From<CreateTopicUserResponse> for Response {
+        fn from(res: CreateTopicUserResponse) -> Self {
+            Self {
+                topic_user: TopicUser {
+                    topic_user_id: res.topic_user_id().into(),
+                },
+            }
+        }
+    }
+}
+
+async fn delete_user_topic(
+    State(AppState {
+        topics_service_client,
+        ..
+    }): State<AppState>,
+    user: CurrentUser,
+    AppJson(req): AppJson<delete_user_topic::Request>,
+) -> Result<AppJson<delete_user_topic::Response>, AppError> {
+    let mut delete_topic_user_req: DeleteTopicUserRequest = req.into();
+    delete_topic_user_req.current_user_id = user.user_id;
+
+    topics_service_client
+        .clone()
+        .delete_topic_user(delete_topic_user_req)
+        .await?;
+
+    Ok(AppJson(delete_user_topic::Response {}))
+}
+
+mod delete_user_topic {
+    use bzd_messages_api::topics::DeleteTopicUserRequest;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize)]
+    pub struct Request {
+        topic_user_id: String,
+    }
+
+    impl From<Request> for DeleteTopicUserRequest {
+        fn from(req: Request) -> Self {
+            Self {
+                topic_user_id: req.topic_user_id.into(),
+                current_user_id: None,
+            }
+        }
+    }
+
+    #[derive(Serialize)]
+    pub struct Response {}
 }
 
 async fn get_user_messages(
