@@ -176,7 +176,7 @@ async fn get_user_topics(
     }): State<AppState>,
     user: CurrentUser,
 ) -> Result<AppJson<get_user_topics::Response>, AppError> {
-    let get_user_topics_res = topics_service_client
+    let get_user_topics = topics_service_client
         .clone()
         .get_user_topics(GetUserTopicsRequest {
             user_id: user_id.into(),
@@ -184,33 +184,29 @@ async fn get_user_topics(
         .await?
         .into_inner();
 
-    let get_topics_res = topics_service_client
+    let get_topics = topics_service_client
         .clone()
         .get_topics(GetTopicsRequest {
-            topic_ids: get_user_topics_res.topic_ids.clone(),
+            topic_ids: get_user_topics.topic_ids.clone(),
         })
         .await?
         .into_inner();
 
-    let get_topics_users_res = topics_service_client
+    let get_topics_users = topics_service_client
         .clone()
         .get_topics_users(GetTopicsUsersRequest {
-            topic_ids: get_user_topics_res.topic_ids.clone(),
+            topic_ids: get_user_topics.topic_ids.clone(),
             current_user_id: user.user_id,
         })
         .await?
         .into_inner();
 
-    Ok(AppJson(
-        (get_user_topics_res, get_topics_res, get_topics_users_res).try_into()?,
-    ))
+    Ok(AppJson((get_topics, get_topics_users).try_into()?))
 }
 
 mod get_user_topics {
-    use std::collections::HashMap;
-
     use bzd_messages_api::topics::{
-        GetTopicsResponse, GetTopicsUsersResponse, GetUserTopicsResponse, get_topics_users_response,
+        self, GetTopicsResponse, GetTopicsUsersResponse, get_topics_users_response,
     };
     use serde::Serialize;
 
@@ -219,77 +215,55 @@ mod get_user_topics {
     #[derive(Serialize)]
     pub struct Response {
         topics: Vec<Topic>,
+        topics_users: Vec<TopicUser>,
     }
 
     #[derive(Serialize)]
     struct Topic {
         topic_id: String,
         title: String,
-        topic_user: Option<TopicUser>,
     }
 
     #[derive(Serialize)]
     struct TopicUser {
         topic_user_id: String,
+        topic_id: String,
+        user_id: String,
     }
 
-    type Responses = (
-        GetUserTopicsResponse,
-        GetTopicsResponse,
-        GetTopicsUsersResponse,
-    );
-
-    type TopicId = String;
-    type TopicUserId = String;
-    type TopicsUsers = HashMap<TopicUserId, get_topics_users_response::TopicUser>;
-    type Topics = HashMap<TopicId, bzd_messages_api::topics::Topic>;
+    type Responses = (GetTopicsResponse, GetTopicsUsersResponse);
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
 
-        fn try_from(
-            (get_user_topics_res, get_topics_res, get_topics_users_res): Responses,
-        ) -> Result<Self, Self::Error> {
-            let topics_users: TopicsUsers = get_topics_users_res
-                .topics_users
-                .into_iter()
-                .map(|it| (it.topic_id().into(), it))
-                .collect();
-
-            let topics: Topics = get_topics_res
-                .topics
-                .into_iter()
-                .map(|it| (it.topic_id().into(), it))
-                .collect();
-
+        fn try_from((get_topics, get_topics_users): Responses) -> Result<Self, Self::Error> {
             Ok(Self {
-                topics: get_user_topics_res
-                    .topic_ids
-                    .into_iter()
-                    .map(|it| (it, &topics, &topics_users).try_into())
-                    .collect::<Result<_, _>>()?,
+                topics: get_topics.topics.iter().map(Into::into).collect(),
+                topics_users: get_topics_users
+                    .topics_users
+                    .iter()
+                    .map(Into::into)
+                    .collect(),
             })
         }
     }
 
-    impl TryFrom<(TopicId, &Topics, &TopicsUsers)> for Topic {
-        type Error = AppError;
-
-        fn try_from(
-            (topic_id, topics, topics_users): (TopicId, &Topics, &TopicsUsers),
-        ) -> Result<Self, Self::Error> {
-            let topic = topics
-                .get(&topic_id)
-                .ok_or(AppError::Unreachable)?
-                .to_owned();
-
-            Ok(Self {
+    impl From<&topics::Topic> for Topic {
+        fn from(topic: &topics::Topic) -> Self {
+            Self {
                 topic_id: topic.topic_id().into(),
                 title: topic.title().into(),
-                topic_user: topics_users.get(topic.topic_id()).map(|it| TopicUser {
-                    topic_user_id: it.topic_user_id().into(),
-                }),
-            })
+            }
+        }
+    }
+
+    impl From<&get_topics_users_response::TopicUser> for TopicUser {
+        fn from(message_topic: &get_topics_users_response::TopicUser) -> Self {
+            Self {
+                topic_user_id: message_topic.topic_user_id().into(),
+                topic_id: message_topic.topic_id().into(),
+                user_id: message_topic.user_id().into(),
+            }
         }
     }
 }
