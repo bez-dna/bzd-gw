@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
 };
 use bzd_messages_api::topics::{
-    CreateTopicRequest, GetTopicRequest, GetTopicsRequest, GetUserTopicsRequest,
+    CreateTopicRequest, GetEmojisRequest, GetTopicRequest, GetTopicsRequest, GetUserTopicsRequest,
 };
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
@@ -22,36 +22,48 @@ async fn get_topics(
     }): State<AppState>,
     user: CurrentUser,
 ) -> Result<AppJson<get_topics::Response>, AppError> {
-    let get_user_topics_res = topics_service_client
+    let get_user_topics = topics_service_client
         .clone()
         .get_user_topics(GetUserTopicsRequest {
-            user_id: user.user_id,
+            user_id: user.user_id.clone(),
         })
         .await?
         .into_inner();
 
-    let get_topics_res = topics_service_client
+    let get_topics = topics_service_client
         .clone()
         .get_topics(GetTopicsRequest {
-            topic_ids: get_user_topics_res.topic_ids.clone(),
+            topic_ids: get_user_topics.topic_ids.clone(),
         })
         .await?
         .into_inner();
 
-    Ok(AppJson((get_user_topics_res, get_topics_res).try_into()?))
+    let get_emojis = topics_service_client
+        .clone()
+        .get_emojis(GetEmojisRequest::default())
+        .await?
+        .into_inner();
+
+    Ok(AppJson(
+        (get_topics, get_user_topics, get_emojis, user).try_into()?,
+    ))
 }
 
 mod get_topics {
     use std::collections::HashMap;
 
-    use bzd_messages_api::topics::{GetTopicsResponse, GetUserTopicsResponse};
+    use bzd_messages_api::topics::{
+        GetEmojisResponse, GetTopicsResponse, GetUserTopicsResponse, get_emojis_response,
+    };
     use serde::Serialize;
 
-    use crate::app::error::AppError;
+    use crate::app::{current_user::CurrentUser, error::AppError};
 
     #[derive(Serialize)]
     pub struct Response {
         pub topics: Vec<Topic>,
+        pub emojis: Vec<Emoji>,
+        pub permissions: Permissions,
     }
 
     #[derive(Serialize)]
@@ -60,7 +72,23 @@ mod get_topics {
         pub title: String,
     }
 
-    type Responses = (GetUserTopicsResponse, GetTopicsResponse);
+    #[derive(Serialize)]
+    pub struct Emoji {
+        pub title: String,
+        pub code: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct Permissions {
+        topics: bool,
+    }
+
+    type Responses = (
+        GetTopicsResponse,
+        GetUserTopicsResponse,
+        GetEmojisResponse,
+        CurrentUser,
+    );
 
     type TopicId = String;
     type Topics = HashMap<TopicId, bzd_messages_api::topics::Topic>;
@@ -84,20 +112,35 @@ mod get_topics {
     impl TryFrom<Responses> for Response {
         type Error = AppError;
 
-        fn try_from((get_user_topics_res, get_topics_res): Responses) -> Result<Self, Self::Error> {
-            let topics: Topics = get_topics_res
+        fn try_from(
+            (get_topics, get_user_topics, get_emojis, current_user): Responses,
+        ) -> Result<Self, Self::Error> {
+            let topics: Topics = get_topics
                 .topics
                 .into_iter()
                 .map(|it| (it.topic_id().into(), it))
                 .collect();
 
             Ok(Self {
-                topics: get_user_topics_res
+                topics: get_user_topics
                     .topic_ids
                     .into_iter()
                     .map(|it| (it, &topics).try_into())
                     .collect::<Result<_, _>>()?,
+                emojis: get_emojis.emojis.into_iter().map(Into::into).collect(),
+                permissions: Permissions {
+                    topics: current_user.user_id.is_some(),
+                },
             })
+        }
+    }
+
+    impl From<get_emojis_response::Emoji> for Emoji {
+        fn from(emoji: get_emojis_response::Emoji) -> Self {
+            Self {
+                title: emoji.title().into(),
+                code: emoji.code().into(),
+            }
         }
     }
 }
@@ -111,7 +154,7 @@ async fn create_topic(
     AppJson(data): AppJson<create_topic::Request>,
 ) -> Result<AppJson<create_topic::Response>, AppError> {
     let mut req: CreateTopicRequest = data.into();
-    req.user_id = user.user_id.clone();
+    req.current_user_id = user.user_id.clone();
 
     let create_topic_response = topics_service_client
         .clone()
@@ -154,7 +197,7 @@ mod create_topic {
         fn from(req: Request) -> Self {
             Self {
                 title: Some(req.title),
-                user_id: None,
+                current_user_id: None,
             }
         }
     }

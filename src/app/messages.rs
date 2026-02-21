@@ -102,8 +102,6 @@ async fn get_feed_messages(
     user: CurrentUser,
     Query(req): Query<get_feed_messages::Request>,
 ) -> Result<AppJson<get_feed_messages::Response>, AppError> {
-    // sleep(Duration::from_secs(1)).await;
-
     let get_user_entries_res = feeds
         .clone()
         .get_user_entries(GetUserEntriesRequest {
