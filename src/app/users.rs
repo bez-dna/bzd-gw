@@ -119,6 +119,7 @@ async fn get_user(
         users_service_client,
         ..
     }): State<AppState>,
+    user: CurrentUser,
 ) -> Result<AppJson<get_user::Response>, AppError> {
     let get_user = users_service_client
         .clone()
@@ -128,18 +129,26 @@ async fn get_user(
         .await?
         .into_inner();
 
-    Ok(AppJson((get_user).try_into()?))
+    Ok(AppJson((get_user, user).try_into()?))
 }
 
 mod get_user {
     use bzd_users_api::users::GetUserResponse;
     use serde::Serialize;
 
-    use crate::app::error::AppError;
+    use crate::app::{current_user::CurrentUser, error::AppError};
 
     #[derive(Serialize)]
     pub struct Response {
         user: User,
+        permissions: Permissions,
+    }
+
+    #[derive(Serialize)]
+    struct Permissions {
+        logout: bool,
+        topics: bool,
+        topics_users: bool,
     }
 
     #[derive(Serialize)]
@@ -150,11 +159,13 @@ mod get_user {
         pub color: String,
     }
 
-    impl TryFrom<GetUserResponse> for Response {
+    impl TryFrom<(GetUserResponse, CurrentUser)> for Response {
         type Error = AppError;
 
-        fn try_from(res: GetUserResponse) -> Result<Self, Self::Error> {
-            let user = res.user.ok_or(AppError::Unreachable)?.to_owned();
+        fn try_from(
+            (get_user, current_user): (GetUserResponse, CurrentUser),
+        ) -> Result<Self, Self::Error> {
+            let user = get_user.user.ok_or(AppError::Unreachable)?.to_owned();
 
             Ok(Self {
                 user: User {
@@ -162,6 +173,12 @@ mod get_user {
                     name: user.name().into(),
                     abbr: user.abbr().into(),
                     color: user.color().into(),
+                },
+                // да-да, повторение, бла-бла.. пока пофиг, тут ваще не должно быть логики, чисто затычка
+                permissions: Permissions {
+                    logout: current_user.user_id == Some(user.user_id().into()),
+                    topics: current_user.user_id == Some(user.user_id().into()),
+                    topics_users: current_user.user_id != Some(user.user_id().into()),
                 },
             })
         }
@@ -174,7 +191,7 @@ async fn get_user_topics(
         topics_service_client,
         ..
     }): State<AppState>,
-    user: CurrentUser,
+    current_user: CurrentUser,
 ) -> Result<AppJson<get_user_topics::Response>, AppError> {
     let get_user_topics = topics_service_client
         .clone()
@@ -196,12 +213,14 @@ async fn get_user_topics(
         .clone()
         .get_topics_users(GetTopicsUsersRequest {
             topic_ids: get_user_topics.topic_ids.clone(),
-            current_user_id: user.user_id,
+            current_user_id: current_user.user_id.clone(),
         })
         .await?
         .into_inner();
 
-    Ok(AppJson((get_topics, get_topics_users).try_into()?))
+    Ok(AppJson(
+        (get_topics, get_topics_users, current_user).try_into()?,
+    ))
 }
 
 mod get_user_topics {
@@ -210,12 +229,13 @@ mod get_user_topics {
     };
     use serde::Serialize;
 
-    use crate::app::error::AppError;
+    use crate::app::{current_user::CurrentUser, error::AppError};
 
     #[derive(Serialize)]
     pub struct Response {
         topics: Vec<Topic>,
         topics_users: Vec<TopicUser>,
+        permissions: Permissions,
     }
 
     #[derive(Serialize)]
@@ -231,12 +251,19 @@ mod get_user_topics {
         user_id: String,
     }
 
-    type Responses = (GetTopicsResponse, GetTopicsUsersResponse);
+    #[derive(Serialize)]
+    pub struct Permissions {
+        topics_users: bool,
+    }
+
+    type Responses = (GetTopicsResponse, GetTopicsUsersResponse, CurrentUser);
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
 
-        fn try_from((get_topics, get_topics_users): Responses) -> Result<Self, Self::Error> {
+        fn try_from(
+            (get_topics, get_topics_users, current_user): Responses,
+        ) -> Result<Self, Self::Error> {
             Ok(Self {
                 topics: get_topics.topics.iter().map(Into::into).collect(),
                 topics_users: get_topics_users
@@ -244,6 +271,11 @@ mod get_user_topics {
                     .iter()
                     .map(Into::into)
                     .collect(),
+                permissions: Permissions {
+                    // эта фигня тут протекла потому что лень пока делать норм пермишны,
+                    // но чтобы не тащить хардкод на мобилку, будут вот такие вот заглушки на гейте
+                    topics_users: current_user.user_id.is_some(),
+                },
             })
         }
     }
