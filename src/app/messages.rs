@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, Query, State},
     routing::{delete, get, post},
 };
-use bzd_feeds_api::feeds::GetUserEntriesRequest;
+use bzd_flux_api::feeds::GetUserEntriesRequest;
 use bzd_messages_api::{
     messages::{
         CreateMessageRequest, CreateMessageTopicRequest, DeleteMessageTopicRequest,
@@ -141,7 +141,7 @@ async fn get_feed_messages(
 mod get_feed_messages {
     use std::collections::HashMap;
 
-    use bzd_feeds_api::feeds::GetUserEntriesResponse;
+    use bzd_flux_api::feeds::GetUserEntriesResponse;
     use bzd_messages_api::messages::{GetMessagesResponse, get_messages_response};
     use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
