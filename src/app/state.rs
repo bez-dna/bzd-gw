@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bzd_feeds_api::feeds::feeds_service_client::FeedsServiceClient;
+use bzd_flux_api::feeds::feeds_service_client::FeedsServiceClient;
 use bzd_lib::error::Error;
 use bzd_messages_api::{
     messages::messages_service_client::MessagesServiceClient,
