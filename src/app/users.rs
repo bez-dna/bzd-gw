@@ -8,8 +8,8 @@ use axum::{
 use bzd_messages_api::{
     messages::{GetMessagesRequest, GetUserMessagesRequest},
     topics::{
-        CreateTopicUserRequest, DeleteTopicUserRequest, GetTopicsRequest, GetTopicsUsersRequest,
-        GetUserTopicsRequest,
+        CreateTopicUserRequest, DeleteTopicUserRequest, GetUserTopicsRequest,
+        GetUserTopicsUsersRequest,
     },
 };
 use bzd_users_api::users::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
@@ -201,31 +201,22 @@ async fn get_user_topics(
         .await?
         .into_inner();
 
-    let get_topics = topics_service_client
+    let get_user_topics_users = topics_service_client
         .clone()
-        .get_topics(GetTopicsRequest {
-            topic_ids: get_user_topics.topic_ids.clone(),
-        })
-        .await?
-        .into_inner();
-
-    let get_topics_users = topics_service_client
-        .clone()
-        .get_topics_users(GetTopicsUsersRequest {
-            topic_ids: get_user_topics.topic_ids.clone(),
+        .get_user_topics_users(GetUserTopicsUsersRequest {
             current_user_id: current_user.user_id.clone(),
         })
         .await?
         .into_inner();
 
     Ok(AppJson(
-        (get_topics, get_topics_users, current_user).try_into()?,
+        (get_user_topics, get_user_topics_users, current_user).try_into()?,
     ))
 }
 
 mod get_user_topics {
     use bzd_messages_api::topics::{
-        self, GetTopicsResponse, GetTopicsUsersResponse, get_topics_users_response,
+        self, GetUserTopicsResponse, GetUserTopicsUsersResponse, get_user_topics_users_response,
     };
     use serde::Serialize;
 
@@ -256,16 +247,20 @@ mod get_user_topics {
         topics_users: bool,
     }
 
-    type Responses = (GetTopicsResponse, GetTopicsUsersResponse, CurrentUser);
+    type Responses = (
+        GetUserTopicsResponse,
+        GetUserTopicsUsersResponse,
+        CurrentUser,
+    );
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
 
         fn try_from(
-            (get_topics, get_topics_users, current_user): Responses,
+            (get_user_topics, get_topics_users, current_user): Responses,
         ) -> Result<Self, Self::Error> {
             Ok(Self {
-                topics: get_topics.topics.iter().map(Into::into).collect(),
+                topics: get_user_topics.topics.iter().map(Into::into).collect(),
                 topics_users: get_topics_users
                     .topics_users
                     .iter()
@@ -289,8 +284,8 @@ mod get_user_topics {
         }
     }
 
-    impl From<&get_topics_users_response::TopicUser> for TopicUser {
-        fn from(message_topic: &get_topics_users_response::TopicUser) -> Self {
+    impl From<&get_user_topics_users_response::TopicUser> for TopicUser {
+        fn from(message_topic: &get_user_topics_users_response::TopicUser) -> Self {
             Self {
                 topic_user_id: message_topic.topic_user_id().into(),
                 topic_id: message_topic.topic_id().into(),
