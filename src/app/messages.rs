@@ -24,7 +24,6 @@ pub fn router() -> Router<AppState> {
         .route("/", get(get_feed_messages))
         .route("/{message_id}", get(get_message))
         .route("/{message_id}/messages", get(get_message_messages))
-        // .route("/{message_id}/topics", get(get_message_topics))
         .route("/topics", post(create_message_topic))
         .route("/topics", delete(delete_message_topic))
 }
@@ -616,103 +615,6 @@ mod get_message_messages {
         }
     }
 }
-
-// async fn get_message_topics(
-//     Path(message_id): Path<String>,
-//     State(AppState {
-//         topics_service_client,
-//         messages_service_client,
-//         ..
-//     }): State<AppState>,
-//     user: CurrentUser,
-// ) -> Result<AppJson<get_message_topics::Response>, AppError> {
-//     let get_messages_topics = messages_service_client
-//         .clone()
-//         .get_messages_topics(GetMessagesTopicsRequest {
-//             message_ids: vec![message_id],
-//         })
-//         .await?
-//         .into_inner();
-
-//     let get_user_topics = topics_service_client
-//         .clone()
-//         .get_user_topics(GetUserTopicsRequest {
-//             user_id: user.user_id,
-//         })
-//         .await?
-//         .into_inner();
-
-//     let get_topics = topics_service_client
-//         .clone()
-//         .get_topics(GetTopicsRequest {
-//             topic_ids: get_user_topics.topic_ids,
-//         })
-//         .await?
-//         .into_inner();
-
-//     Ok(AppJson((get_topics, get_messages_topics).into()))
-// }
-
-// mod get_message_topics {
-//     use bzd_messages_api::{
-//         messages::{GetMessagesTopicsResponse, get_messages_topics_response},
-//         topics::{self, GetTopicsResponse},
-//     };
-//     use serde::Serialize;
-
-//     #[derive(Serialize)]
-//     pub struct Response {
-//         pub topics: Vec<Topic>,
-//         pub messages_topics: Vec<MessageTopic>,
-//     }
-
-//     #[derive(Serialize)]
-//     pub struct Topic {
-//         pub topic_id: String,
-//         pub title: String,
-//     }
-
-//     #[derive(Serialize)]
-//     pub struct MessageTopic {
-//         pub message_topic_id: String,
-//         pub topic_id: String,
-//         pub message_id: String,
-//     }
-
-//     type Responses = (GetTopicsResponse, GetMessagesTopicsResponse);
-
-//     impl From<Responses> for Response {
-//         fn from((get_topics, get_messages_topics): Responses) -> Self {
-//             Self {
-//                 topics: get_topics.topics.iter().map(Into::into).collect(),
-//                 messages_topics: get_messages_topics
-//                     .messages_topics
-//                     .iter()
-//                     .map(Into::into)
-//                     .collect(),
-//             }
-//         }
-//     }
-
-//     impl From<&topics::Topic> for Topic {
-//         fn from(topic: &topics::Topic) -> Self {
-//             Self {
-//                 topic_id: topic.topic_id().into(),
-//                 title: topic.title().into(),
-//             }
-//         }
-//     }
-
-//     impl From<&get_messages_topics_response::MessageTopic> for MessageTopic {
-//         fn from(message_topic: &get_messages_topics_response::MessageTopic) -> Self {
-//             Self {
-//                 message_topic_id: message_topic.message_topic_id().into(),
-//                 topic_id: message_topic.topic_id().into(),
-//                 message_id: message_topic.message_id().into(),
-//             }
-//         }
-//     }
-// }
 
 async fn create_message_topic(
     State(AppState {
