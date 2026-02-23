@@ -9,7 +9,7 @@ use bzd_messages_api::{
     messages::{GetMessagesRequest, GetUserMessagesRequest},
     topics::{
         CreateTopicUserRequest, DeleteTopicUserRequest, GetUserTopicsRequest,
-        GetUserTopicsUsersRequest,
+        GetUserTopicsResponse, GetUserTopicsUsersRequest,
     },
 };
 use bzd_users_api::users::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
@@ -390,10 +390,12 @@ async fn get_user_messages(
     State(AppState {
         messages_service_client,
         users_service_client,
+        topics_service_client,
         ..
     }): State<AppState>,
     Path(user_id): Path<String>,
     Query(req): Query<get_user_messages::Request>,
+    current_user: CurrentUser,
 ) -> Result<AppJson<get_user_messages::Response>, AppError> {
     let get_user_messages = messages_service_client
         .clone()
@@ -426,21 +428,40 @@ async fn get_user_messages(
         .await?
         .into_inner();
 
+    let get_user_topics = match current_user.user_id.clone() {
+        Some(user_id) => topics_service_client
+            .clone()
+            .get_user_topics(GetUserTopicsRequest {
+                user_id: Some(user_id),
+            })
+            .await?
+            .into_inner(),
+        None => GetUserTopicsResponse::default(),
+    };
+
     Ok(AppJson(
-        (get_user_messages, get_messages, get_users).try_into()?,
+        (
+            get_user_messages,
+            get_messages,
+            get_users,
+            get_user_topics,
+            current_user,
+        )
+            .try_into()?,
     ))
 }
 
 mod get_user_messages {
     use std::collections::HashMap;
 
-    use bzd_messages_api::messages::{
-        GetMessagesResponse, GetUserMessagesResponse, get_messages_response,
+    use bzd_messages_api::{
+        messages::{GetMessagesResponse, GetUserMessagesResponse, get_messages_response},
+        topics::{self, GetUserTopicsResponse},
     };
     use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
 
-    use crate::app::error::AppError;
+    use crate::app::{current_user::CurrentUser, error::AppError};
 
     #[derive(Deserialize)]
     pub struct Request {
@@ -449,29 +470,38 @@ mod get_user_messages {
 
     #[derive(Serialize)]
     pub struct Response {
-        pub messages: Vec<Message>,
-        pub cursor_message_id: Option<String>,
+        messages: Vec<Message>,
+        topics: Vec<Topic>,
+        cursor_message_id: Option<String>,
     }
 
     #[derive(Serialize)]
-    pub struct Message {
-        pub message_id: String,
-        pub text: String,
-        pub user: User,
+    struct Message {
+        message_id: String,
+        text: String,
+        user: User,
     }
 
     #[derive(Serialize)]
-    pub struct User {
-        pub user_id: String,
-        pub name: String,
-        pub abbr: String,
-        pub color: String,
+    struct User {
+        user_id: String,
+        name: String,
+        abbr: String,
+        color: String,
+    }
+
+    #[derive(Serialize)]
+    struct Topic {
+        topic_id: String,
+        title: String,
     }
 
     type Responses = (
         GetUserMessagesResponse,
         GetMessagesResponse,
         GetUsersResponse,
+        GetUserTopicsResponse,
+        CurrentUser,
     );
 
     type Users = HashMap<String, get_users_response::User>;
@@ -481,7 +511,7 @@ mod get_user_messages {
         type Error = AppError;
 
         fn try_from(
-            (get_user_messages, get_messages, get_users): Responses,
+            (get_user_messages, get_messages, get_users, get_user_topics, _current_user): Responses,
         ) -> Result<Self, Self::Error> {
             let users: Users = get_users
                 .users
@@ -501,6 +531,7 @@ mod get_user_messages {
                     .into_iter()
                     .map(|message_id| (message_id, &messages, &users).try_into())
                     .collect::<Result<_, _>>()?,
+                topics: get_user_topics.topics.iter().map(Into::into).collect(),
                 cursor_message_id: get_user_messages.cursor_message_id,
             })
         }
@@ -532,6 +563,15 @@ mod get_user_messages {
                     color: user.color().into(),
                 },
             })
+        }
+    }
+
+    impl From<&topics::Topic> for Topic {
+        fn from(topic: &topics::Topic) -> Self {
+            Self {
+                topic_id: topic.topic_id().into(),
+                title: topic.title().into(),
+            }
         }
     }
 }

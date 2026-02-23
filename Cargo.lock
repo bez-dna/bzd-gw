@@ -236,7 +236,7 @@ dependencies = [
 [[package]]
 name = "bzd-messages-api"
 version = "0.0.0"
-source = "git+https://github.com/bez-dna/bzd-messages.git?branch=dev#f1bf6da858ce09d19e1f53ab69281c0b75e628f3"
+source = "git+https://github.com/bez-dna/bzd-messages.git#6336d271ec2bdfec3b83c950ce16a5cc237c25fb"
 dependencies = [
  "bzd-lib",
  "prost",

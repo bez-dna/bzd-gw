@@ -9,10 +9,10 @@ use bzd_flux_api::feeds::GetUserEntriesRequest;
 use bzd_messages_api::{
     messages::{
         CreateMessageRequest, CreateMessageTopicRequest, DeleteMessageTopicRequest,
-        GetMessageMessagesRequest, GetMessageRequest, GetMessagesRequest, GetMessagesTopicsRequest,
-        GetStreamsRequest,
+        GetMessageMessagesRequest, GetMessageRequest, GetMessagesRequest, GetStreamsRequest,
+        GetUserMessagesTopicsRequest,
     },
-    topics::{GetTopicsRequest, GetUserTopicsRequest},
+    topics::{GetUserTopicsRequest, GetUserTopicsResponse},
 };
 use bzd_users_api::users::GetUsersRequest;
 
@@ -24,7 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(get_feed_messages))
         .route("/{message_id}", get(get_message))
         .route("/{message_id}/messages", get(get_message_messages))
-        .route("/{message_id}/topics", get(get_message_topics))
+        // .route("/{message_id}/topics", get(get_message_topics))
         .route("/topics", post(create_message_topic))
         .route("/topics", delete(delete_message_topic))
 }
@@ -297,11 +297,14 @@ async fn get_message_messages(
     State(AppState {
         messages_service_client,
         users_service_client,
+        topics_service_client,
         ..
     }): State<AppState>,
     Query(req): Query<get_message_messages::Request>,
     current_user: CurrentUser,
 ) -> Result<AppJson<get_message_messages::Response>, AppError> {
+    // TODO: тут критически важно избавиться от последовательных вызовов
+
     let get_message_messages = messages_service_client
         .clone()
         .get_message_messages(GetMessageMessagesRequest {
@@ -348,12 +351,34 @@ async fn get_message_messages(
         .await?
         .into_inner();
 
+    let get_user_messages_topics = messages_service_client
+        .clone()
+        .get_user_messages_topics(GetUserMessagesTopicsRequest {
+            user_id: current_user.user_id.clone(),
+            message_ids: get_message_messages.message_ids.clone(),
+        })
+        .await?
+        .into_inner();
+
+    let get_user_topics = match current_user.user_id.clone() {
+        Some(user_id) => topics_service_client
+            .clone()
+            .get_user_topics(GetUserTopicsRequest {
+                user_id: Some(user_id),
+            })
+            .await?
+            .into_inner(),
+        None => GetUserTopicsResponse::default(),
+    };
+
     Ok(AppJson(
         (
             get_message_messages,
             get_messages,
+            get_user_messages_topics,
             get_users,
             get_streams,
+            get_user_topics,
             current_user,
         )
             .try_into()?,
@@ -363,9 +388,13 @@ async fn get_message_messages(
 mod get_message_messages {
     use std::collections::HashMap;
 
-    use bzd_messages_api::messages::{
-        GetMessageMessagesResponse, GetMessagesResponse, GetStreamsResponse, get_messages_response,
-        get_streams_response,
+    use bzd_messages_api::{
+        messages::{
+            GetMessageMessagesResponse, GetMessagesResponse, GetStreamsResponse,
+            GetUserMessagesTopicsResponse, get_messages_response, get_streams_response,
+            get_user_messages_topics_response,
+        },
+        topics::{self, GetUserTopicsResponse},
     };
     use bzd_users_api::users::{GetUsersResponse, get_users_response};
     use serde::{Deserialize, Serialize};
@@ -380,7 +409,8 @@ mod get_message_messages {
     #[derive(Serialize)]
     pub struct Response {
         messages: Vec<Message>,
-
+        topics: Vec<Topic>,
+        messages_topics: Vec<MessageTopic>,
         cursor_message_id: Option<String>,
     }
 
@@ -396,6 +426,19 @@ mod get_message_messages {
     #[derive(Serialize)]
     struct Permissions {
         topics: bool,
+    }
+
+    #[derive(Serialize)]
+    struct Topic {
+        topic_id: String,
+        title: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct MessageTopic {
+        pub message_topic_id: String,
+        pub topic_id: String,
+        pub message_id: String,
     }
 
     #[derive(Serialize)]
@@ -418,8 +461,10 @@ mod get_message_messages {
     type Responses = (
         GetMessageMessagesResponse,
         GetMessagesResponse,
+        GetUserMessagesTopicsResponse,
         GetUsersResponse,
         GetStreamsResponse,
+        GetUserTopicsResponse,
         CurrentUser,
     );
 
@@ -431,7 +476,15 @@ mod get_message_messages {
         type Error = AppError;
 
         fn try_from(
-            (get_message_messages, get_messages, get_users, get_streams, current_user): Responses,
+            (
+                get_message_messages,
+                get_messages,
+                get_messages_topics,
+                get_users,
+                get_streams,
+                get_user_topics,
+                current_user,
+            ): Responses,
         ) -> Result<Self, Self::Error> {
             let users: Users = get_users
                 .users
@@ -459,6 +512,12 @@ mod get_message_messages {
                         (message_id, &messages, &users, &streams, &current_user).try_into()
                     })
                     .collect::<Result<_, _>>()?,
+                topics: get_user_topics.topics.iter().map(Into::into).collect(),
+                messages_topics: get_messages_topics
+                    .messages_topics
+                    .iter()
+                    .map(Into::into)
+                    .collect(),
                 cursor_message_id: get_message_messages.cursor_message_id,
             })
         }
@@ -537,84 +596,6 @@ mod get_message_messages {
             })
         }
     }
-}
-
-async fn get_message_topics(
-    Path(message_id): Path<String>,
-    State(AppState {
-        topics_service_client,
-        messages_service_client,
-        ..
-    }): State<AppState>,
-    user: CurrentUser,
-) -> Result<AppJson<get_message_topics::Response>, AppError> {
-    let get_messages_topics = messages_service_client
-        .clone()
-        .get_messages_topics(GetMessagesTopicsRequest {
-            message_ids: vec![message_id],
-        })
-        .await?
-        .into_inner();
-
-    let get_user_topics = topics_service_client
-        .clone()
-        .get_user_topics(GetUserTopicsRequest {
-            user_id: user.user_id,
-        })
-        .await?
-        .into_inner();
-
-    let get_topics = topics_service_client
-        .clone()
-        .get_topics(GetTopicsRequest {
-            topic_ids: get_user_topics.topic_ids,
-        })
-        .await?
-        .into_inner();
-
-    Ok(AppJson((get_topics, get_messages_topics).into()))
-}
-
-mod get_message_topics {
-    use bzd_messages_api::{
-        messages::{GetMessagesTopicsResponse, get_messages_topics_response},
-        topics::{self, GetTopicsResponse},
-    };
-    use serde::Serialize;
-
-    #[derive(Serialize)]
-    pub struct Response {
-        pub topics: Vec<Topic>,
-        pub messages_topics: Vec<MessageTopic>,
-    }
-
-    #[derive(Serialize)]
-    pub struct Topic {
-        pub topic_id: String,
-        pub title: String,
-    }
-
-    #[derive(Serialize)]
-    pub struct MessageTopic {
-        pub message_topic_id: String,
-        pub topic_id: String,
-        pub message_id: String,
-    }
-
-    type Responses = (GetTopicsResponse, GetMessagesTopicsResponse);
-
-    impl From<Responses> for Response {
-        fn from((get_topics, get_messages_topics): Responses) -> Self {
-            Self {
-                topics: get_topics.topics.iter().map(Into::into).collect(),
-                messages_topics: get_messages_topics
-                    .messages_topics
-                    .iter()
-                    .map(Into::into)
-                    .collect(),
-            }
-        }
-    }
 
     impl From<&topics::Topic> for Topic {
         fn from(topic: &topics::Topic) -> Self {
@@ -625,8 +606,8 @@ mod get_message_topics {
         }
     }
 
-    impl From<&get_messages_topics_response::MessageTopic> for MessageTopic {
-        fn from(message_topic: &get_messages_topics_response::MessageTopic) -> Self {
+    impl From<&get_user_messages_topics_response::MessageTopic> for MessageTopic {
+        fn from(message_topic: &get_user_messages_topics_response::MessageTopic) -> Self {
             Self {
                 message_topic_id: message_topic.message_topic_id().into(),
                 topic_id: message_topic.topic_id().into(),
@@ -635,6 +616,103 @@ mod get_message_topics {
         }
     }
 }
+
+// async fn get_message_topics(
+//     Path(message_id): Path<String>,
+//     State(AppState {
+//         topics_service_client,
+//         messages_service_client,
+//         ..
+//     }): State<AppState>,
+//     user: CurrentUser,
+// ) -> Result<AppJson<get_message_topics::Response>, AppError> {
+//     let get_messages_topics = messages_service_client
+//         .clone()
+//         .get_messages_topics(GetMessagesTopicsRequest {
+//             message_ids: vec![message_id],
+//         })
+//         .await?
+//         .into_inner();
+
+//     let get_user_topics = topics_service_client
+//         .clone()
+//         .get_user_topics(GetUserTopicsRequest {
+//             user_id: user.user_id,
+//         })
+//         .await?
+//         .into_inner();
+
+//     let get_topics = topics_service_client
+//         .clone()
+//         .get_topics(GetTopicsRequest {
+//             topic_ids: get_user_topics.topic_ids,
+//         })
+//         .await?
+//         .into_inner();
+
+//     Ok(AppJson((get_topics, get_messages_topics).into()))
+// }
+
+// mod get_message_topics {
+//     use bzd_messages_api::{
+//         messages::{GetMessagesTopicsResponse, get_messages_topics_response},
+//         topics::{self, GetTopicsResponse},
+//     };
+//     use serde::Serialize;
+
+//     #[derive(Serialize)]
+//     pub struct Response {
+//         pub topics: Vec<Topic>,
+//         pub messages_topics: Vec<MessageTopic>,
+//     }
+
+//     #[derive(Serialize)]
+//     pub struct Topic {
+//         pub topic_id: String,
+//         pub title: String,
+//     }
+
+//     #[derive(Serialize)]
+//     pub struct MessageTopic {
+//         pub message_topic_id: String,
+//         pub topic_id: String,
+//         pub message_id: String,
+//     }
+
+//     type Responses = (GetTopicsResponse, GetMessagesTopicsResponse);
+
+//     impl From<Responses> for Response {
+//         fn from((get_topics, get_messages_topics): Responses) -> Self {
+//             Self {
+//                 topics: get_topics.topics.iter().map(Into::into).collect(),
+//                 messages_topics: get_messages_topics
+//                     .messages_topics
+//                     .iter()
+//                     .map(Into::into)
+//                     .collect(),
+//             }
+//         }
+//     }
+
+//     impl From<&topics::Topic> for Topic {
+//         fn from(topic: &topics::Topic) -> Self {
+//             Self {
+//                 topic_id: topic.topic_id().into(),
+//                 title: topic.title().into(),
+//             }
+//         }
+//     }
+
+//     impl From<&get_messages_topics_response::MessageTopic> for MessageTopic {
+//         fn from(message_topic: &get_messages_topics_response::MessageTopic) -> Self {
+//             Self {
+//                 message_topic_id: message_topic.message_topic_id().into(),
+//                 topic_id: message_topic.topic_id().into(),
+//                 message_id: message_topic.message_id().into(),
+//             }
+//         }
+//     }
+// }
 
 async fn create_message_topic(
     State(AppState {
