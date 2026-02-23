@@ -32,7 +32,6 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         debug!("{}", self.to_string());
-        dbg!(&self);
 
         let code = match self {
             AppError::Status(status) => match status.code() {
