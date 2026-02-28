@@ -479,6 +479,8 @@ mod get_user_messages {
     struct Message {
         message_id: String,
         text: String,
+        code: String,
+        order: i64,
         user: User,
     }
 
@@ -556,6 +558,8 @@ mod get_user_messages {
             Ok(Self {
                 message_id: message.message_id().into(),
                 text: message.text().into(),
+                code: message.code().into(),
+                order: message.order(),
                 user: User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),
