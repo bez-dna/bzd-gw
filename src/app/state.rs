@@ -25,7 +25,7 @@ pub struct AppState {
     pub contacts_service_client: ContactsServiceClient<Channel>,
     pub messages_service_client: MessagesServiceClient<Channel>,
     pub topics_service_client: TopicsServiceClient<Channel>,
-    pub feeds: FeedsServiceClient<Channel>,
+    pub feeds_service_client: FeedsServiceClient<Channel>,
     pub decoding_key: Arc<DecodingKey>,
 }
 
@@ -61,7 +61,7 @@ impl AppState {
         )
         .await?;
 
-        let feeds = Self::create_service_client(
+        let feeds_service_client = Self::create_service_client(
             settings.clients.bzd_feeds.endpoint.clone(),
             FeedsServiceClient::new,
         )
@@ -81,7 +81,7 @@ impl AppState {
             contacts_service_client,
             messages_service_client,
             topics_service_client,
-            feeds,
+            feeds_service_client,
             decoding_key,
         })
     }
