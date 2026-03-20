@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use axum::{
     Router,
     extract::{Path, Query, State},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use bzd_messages_api::{
     messages::{
@@ -15,13 +15,16 @@ use bzd_messages_api::{
         GetUserTopicsResponse, GetUserTopicsUsersRequest,
     },
 };
-use bzd_users_api::users::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
+use bzd_users_api::users::{
+    GetUserRequest, GetUserUsersRequest, GetUsersRequest, UpdateUserRequest,
+};
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(get_users))
+        .route("/", patch(update_user))
         .route("/{user_id}", get(get_user))
         .route("/{user_id}/topics", get(get_user_topics))
         .route("/topics", post(create_user_topic))
@@ -149,6 +152,7 @@ mod get_user {
 
     #[derive(Serialize)]
     struct Permissions {
+        edit: bool,
         logout: bool,
         topics: bool,
         topics_users: bool,
@@ -179,6 +183,7 @@ mod get_user {
                 },
                 // да-да, повторение, бла-бла.. пока пофиг, тут ваще не должно быть логики, чисто затычка
                 permissions: Permissions {
+                    edit: current_user.user_id == Some(user.user_id().into()),
                     logout: current_user.user_id == Some(user.user_id().into()),
                     topics: current_user.user_id == Some(user.user_id().into()),
                     topics_users: current_user.user_id != Some(user.user_id().into()),
@@ -186,6 +191,37 @@ mod get_user {
             })
         }
     }
+}
+
+async fn update_user(
+    State(AppState {
+        users_service_client,
+        ..
+    }): State<AppState>,
+    user: CurrentUser,
+    AppJson(req): AppJson<update_user::Request>,
+) -> Result<AppJson<update_user::Response>, AppError> {
+    users_service_client
+        .clone()
+        .update_user(UpdateUserRequest {
+            current_user_id: user.user_id,
+            name: Some(req.name),
+        })
+        .await?;
+
+    Ok(AppJson(update_user::Response {}))
+}
+
+mod update_user {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize)]
+    pub struct Request {
+        pub name: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct Response {}
 }
 
 async fn get_user_topics(
