@@ -42,7 +42,7 @@ mod join {
 
     #[derive(Deserialize)]
     pub struct Request {
-        pub phone_number: String,
+        pub phone: String,
     }
 
     impl TryFrom<Request> for bzd_users_api::auth::JoinRequest {
@@ -50,7 +50,7 @@ mod join {
 
         fn try_from(req: Request) -> Result<Self, Self::Error> {
             Ok(Self {
-                phone_number: Some(req.phone_number.parse::<i64>()?),
+                phone: Some(req.phone.parse::<i64>()?),
             })
         }
     }
@@ -58,7 +58,6 @@ mod join {
     #[derive(Serialize)]
     pub struct Response {
         pub verification: Verification,
-        pub is_new: bool,
     }
 
     #[derive(Serialize)]
@@ -71,8 +70,6 @@ mod join {
 
         fn try_from(res: JoinResponse) -> Result<Self, Self::Error> {
             Ok(Self {
-                is_new: res.is_new(),
-
                 verification: Verification {
                     verification_id: res
                         .verification

@@ -40,7 +40,7 @@ mod create_contacts {
 
     #[derive(Deserialize)]
     pub struct Contact {
-        pub phone_number: String,
+        pub phone: String,
         pub name: String,
         pub device_contact_id: String,
     }
@@ -57,7 +57,7 @@ mod create_contacts {
     impl From<Contact> for create_contacts_request::Contact {
         fn from(contact: Contact) -> Self {
             Self {
-                phone_number: Some(contact.phone_number),
+                phone: Some(contact.phone),
                 name: Some(contact.name),
                 device_contact_id: Some(contact.device_contact_id),
             }
