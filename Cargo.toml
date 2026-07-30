@@ -4,22 +4,22 @@ edition = "2024"
 
 [dependencies]
 bzd-lib = { git = "https://github.com/bez-dna/bzd-lib.git" }
-bzd-users-api = { git = "https://github.com/bez-dna/bzd-users.git", branch = "dev" }
+bzd-users-api = { git = "https://github.com/bez-dna/bzd-users.git" }
 bzd-messages-api = { git = "https://github.com/bez-dna/bzd-messages.git" }
 bzd-flux-api = { git = "https://github.com/bez-dna/bzd-flux.git" }
 
-axum = { version = "0.8.8", features = ["macros"] }
-axum-extra = { version = "0.12.5", features = ["typed-header"] }
+axum = { version = "0.8.9", features = ["macros"] }
+axum-extra = { version = "0.12.6", features = ["typed-header"] }
 
-prost = "0.14.3"
-tonic = { version = "0.14.5", default-features = false, features = ["channel"] }
+prost = "0.14.4"
+tonic = { version = "0.14.6", default-features = false, features = ["channel"] }
 
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 
-tokio = { version = "1.49.0", features = ["full"] }
+tokio = { version = "1.53.1", features = ["full"] }
 
-thiserror = "2.0.18"
+thiserror = "2.0.19"
 tracing = "0.1.44"
-config = { version = "0.15.19", features = ["toml"] }
-jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+config = { version = "0.15.25", features = ["toml"] }
+jsonwebtoken = { version = "11.0.0", features = ["rust_crypto"] }

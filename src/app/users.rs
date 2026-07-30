@@ -546,7 +546,6 @@ mod get_user_messages {
     pub struct Response {
         messages: Vec<Message>,
         topics: Vec<Topic>,
-        messages_topics: Vec<MessageTopic>,
         cursor_message_id: Option<String>,
     }
 
@@ -559,6 +558,7 @@ mod get_user_messages {
         order: i64,
         stream: Option<Stream>,
         permissions: Permissions,
+        messages_topics: Vec<MessageTopic>,
     }
 
     #[derive(Serialize)]
@@ -577,7 +577,6 @@ mod get_user_messages {
     pub struct MessageTopic {
         pub message_topic_id: String,
         pub topic_id: String,
-        pub message_id: String,
     }
 
     #[derive(Serialize)]
@@ -610,6 +609,7 @@ mod get_user_messages {
     type Users = HashMap<String, get_users_response::User>;
     type Messages = HashMap<String, get_messages_response::Message>;
     type Streams = HashMap<String, get_streams_response::Stream>;
+    type MessagesTopics = Vec<get_user_messages_topics_response::MessageTopic>;
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
@@ -648,29 +648,42 @@ mod get_user_messages {
                     .message_ids
                     .into_iter()
                     .map(|message_id| {
-                        (message_id, &messages, &users, &streams, &current_user).try_into()
+                        (
+                            message_id,
+                            &messages,
+                            &users,
+                            &streams,
+                            &get_user_messages_topics.messages_topics,
+                            &current_user,
+                        )
+                            .try_into()
                     })
                     .collect::<Result<_, _>>()?,
                 topics: get_user_topics.topics.iter().map(Into::into).collect(),
-                messages_topics: get_user_messages_topics
-                    .messages_topics
-                    .iter()
-                    .map(Into::into)
-                    .collect(),
                 cursor_message_id: get_user_messages.cursor_message_id,
             })
         }
     }
 
-    impl TryFrom<(String, &Messages, &Users, &Streams, &CurrentUser)> for Message {
+    impl
+        TryFrom<(
+            String,
+            &Messages,
+            &Users,
+            &Streams,
+            &MessagesTopics,
+            &CurrentUser,
+        )> for Message
+    {
         type Error = AppError;
 
         fn try_from(
-            (message_id, messages, users, streams, current_user): (
+            (message_id, messages, users, streams, messages_topics, current_user): (
                 String,
                 &Messages,
                 &Users,
                 &Streams,
+                &MessagesTopics,
                 &CurrentUser,
             ),
         ) -> Result<Self, Self::Error> {
@@ -700,6 +713,11 @@ mod get_user_messages {
                     topics: current_user.user_id.is_some(),
                     message: current_user.user_id.is_some(),
                 },
+                messages_topics: messages_topics
+                    .iter()
+                    .filter(|it| it.message_id() == message.message_id())
+                    .map(Into::into)
+                    .collect(),
             })
         }
     }
@@ -753,7 +771,6 @@ mod get_user_messages {
             Self {
                 message_topic_id: message_topic.message_topic_id().into(),
                 topic_id: message_topic.topic_id().into(),
-                message_id: message_topic.message_id().into(),
             }
         }
     }

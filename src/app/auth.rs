@@ -1,17 +1,19 @@
-pub mod settings;
-
 use axum::{
     Router,
     extract::State,
     routing::{get, post},
 };
 use bzd_users_api::users::{GetUserRequest, GetUserResponse};
+use serde_json::Value;
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
+
+pub mod settings;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/join", post(join))
+        .route("/login", post(login))
         .route("/complete", post(complete))
         .route("/me", get(me))
 }
@@ -22,27 +24,26 @@ async fn join(
         ..
     }): State<AppState>,
     AppJson(data): AppJson<join::Request>,
-) -> Result<AppJson<join::Response>, AppError> {
+) -> Result<AppJson<Value>, AppError> {
     let request: bzd_users_api::auth::JoinRequest = data.try_into()?;
 
-    let response = auth_service_client
+    let res = auth_service_client
         .clone()
         .join(request)
         .await?
         .into_inner();
 
-    Ok(AppJson(response.try_into()?))
+    Ok(AppJson(serde_json::from_str(res.response())?))
 }
 
 mod join {
-    use bzd_users_api::auth::JoinResponse;
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
 
     use crate::app::error::AppError;
 
     #[derive(Deserialize)]
     pub struct Request {
-        pub phone: String,
+        pub login: String,
     }
 
     impl TryFrom<Request> for bzd_users_api::auth::JoinRequest {
@@ -50,34 +51,63 @@ mod join {
 
         fn try_from(req: Request) -> Result<Self, Self::Error> {
             Ok(Self {
-                phone: Some(req.phone.parse::<i64>()?),
+                login: Some(req.login),
             })
+        }
+    }
+}
+
+async fn login(
+    State(AppState {
+        auth_service_client,
+        ..
+    }): State<AppState>,
+    AppJson(data): AppJson<login::Request>,
+) -> Result<AppJson<login::Response>, AppError> {
+    dbg!(&data);
+
+    let request: bzd_users_api::auth::LoginRequest = data.into();
+
+    let response = auth_service_client
+        .clone()
+        .login(request)
+        .await?
+        .into_inner();
+
+    Ok(AppJson(response.into()))
+}
+
+mod login {
+    use bzd_users_api::auth::{LoginRequest, LoginResponse};
+    use serde::{Deserialize, Serialize};
+    use serde_json::{Value, json};
+
+    #[derive(Deserialize, Serialize, Debug)]
+    pub struct Request {
+        pub credential_id: Value,
+        pub client_data: Value,
+        pub signature: Value,
+        pub authenticator_data: Value,
+    }
+
+    impl From<Request> for LoginRequest {
+        fn from(req: Request) -> Self {
+            Self {
+                request: Some(json!(req).to_string()),
+            }
         }
     }
 
     #[derive(Serialize)]
     pub struct Response {
-        pub verification: Verification,
+        pub jwt: String,
     }
 
-    #[derive(Serialize)]
-    pub struct Verification {
-        pub verification_id: String,
-    }
-
-    impl TryFrom<JoinResponse> for Response {
-        type Error = AppError;
-
-        fn try_from(res: JoinResponse) -> Result<Self, Self::Error> {
-            Ok(Self {
-                verification: Verification {
-                    verification_id: res
-                        .verification
-                        .ok_or(AppError::Unreachable)?
-                        .verification_id()
-                        .into(),
-                },
-            })
+    impl From<LoginResponse> for Response {
+        fn from(res: LoginResponse) -> Self {
+            Self {
+                jwt: res.jwt().into(),
+            }
         }
     }
 }
@@ -89,6 +119,8 @@ async fn complete(
     }): State<AppState>,
     AppJson(data): AppJson<complete::Request>,
 ) -> Result<AppJson<complete::Response>, AppError> {
+    dbg!(&data);
+
     let request: bzd_users_api::auth::CompleteRequest = data.into();
 
     let response = auth_service_client
@@ -103,20 +135,19 @@ async fn complete(
 mod complete {
     use bzd_users_api::auth::{CompleteRequest, CompleteResponse};
     use serde::{Deserialize, Serialize};
+    use serde_json::{Value, json};
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Serialize, Debug)]
     pub struct Request {
-        pub verification_id: String,
-        pub code: String,
-        pub name: Option<String>,
+        pub credential_id: Value,
+        pub client_data: Value,
+        pub attestation_object: Value,
     }
 
     impl From<Request> for CompleteRequest {
         fn from(req: Request) -> Self {
             Self {
-                verification_id: Some(req.verification_id),
-                code: Some(req.code),
-                name: req.name,
+                request: Some(json!(req).to_string()),
             }
         }
     }

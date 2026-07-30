@@ -5,10 +5,9 @@ use bzd_lib::{
 };
 use tracing::info;
 
-use crate::app::{settings::AppSettings, state::AppState};
+use crate::app::{error::AppError, settings::AppSettings, state::AppState};
 
 mod auth;
-mod contacts;
 mod current_user;
 mod error;
 mod json;
@@ -29,12 +28,12 @@ pub async fn run() -> Result<(), Error> {
 
 async fn http(state: &AppState, settings: &HttpSettings) -> Result<(), Error> {
     let router = Router::new()
+        .route("/.well-known/apple-app-site-association", get(well))
         .nest(
             "/api",
             Router::new()
                 .route("/healthz", get(|| async {}))
                 .nest("/auth", auth::router())
-                .nest("/contacts", contacts::router())
                 .nest("/topics", topics::router())
                 .nest("/users", users::router())
                 .nest("/messages", messages::router()),
@@ -47,4 +46,9 @@ async fn http(state: &AppState, settings: &HttpSettings) -> Result<(), Error> {
     axum::serve(listener, router).await?;
 
     Ok(())
+}
+
+async fn well() -> Result<String, AppError> {
+    println!("QQQ");
+    Ok(String::from("value"))
 }
