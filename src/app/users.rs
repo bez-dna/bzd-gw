@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use axum::{
     Router,
     extract::{Path, Query, State},
-    routing::{delete, get, patch, post},
+    routing::{delete, get, post},
 };
 use bzd_messages_api::{
     messages::{
@@ -15,21 +15,18 @@ use bzd_messages_api::{
         GetUserTopicsResponse, GetUserTopicsUsersRequest,
     },
 };
-use bzd_users_api::users::{
-    GetUserRequest, GetUserUsersRequest, GetUsersRequest, UpdateUserRequest,
-};
+use bzd_users_api::users::{GetUserRequest, GetUserUsersRequest, GetUsersRequest};
 
 use crate::app::{current_user::CurrentUser, error::AppError, json::AppJson, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(get_users))
-        .route("/", patch(update_user))
         .route("/{user_id}", get(get_user))
         .route("/{user_id}/topics", get(get_user_topics))
+        .route("/{user_id}/messages", get(get_user_messages))
         .route("/topics", post(create_user_topic))
         .route("/topics", delete(delete_user_topic))
-        .route("/{user_id}/messages", get(get_user_messages))
 }
 
 async fn get_users(
@@ -191,37 +188,6 @@ mod get_user {
             })
         }
     }
-}
-
-async fn update_user(
-    State(AppState {
-        users_service_client,
-        ..
-    }): State<AppState>,
-    user: CurrentUser,
-    AppJson(req): AppJson<update_user::Request>,
-) -> Result<AppJson<update_user::Response>, AppError> {
-    users_service_client
-        .clone()
-        .update_user(UpdateUserRequest {
-            current_user_id: user.user_id,
-            name: Some(req.name),
-        })
-        .await?;
-
-    Ok(AppJson(update_user::Response {}))
-}
-
-mod update_user {
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Deserialize)]
-    pub struct Request {
-        pub name: String,
-    }
-
-    #[derive(Serialize)]
-    pub struct Response {}
 }
 
 async fn get_user_topics(
