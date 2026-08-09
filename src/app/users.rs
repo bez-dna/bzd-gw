@@ -490,6 +490,7 @@ async fn get_user_messages(
 mod get_user_messages {
     use std::collections::HashMap;
 
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessagesResponse, GetStreamsResponse, GetUserMessagesResponse,
@@ -522,6 +523,8 @@ mod get_user_messages {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
         messages_topics: Vec<MessageTopic>,
@@ -666,6 +669,14 @@ mod get_user_messages {
                 text: message.text().into(),
                 code: message.code().into(),
                 order: message.order(),
+                created_at: message
+                    .created_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
+                updated_at: message
+                    .updated_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
                 user: User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),

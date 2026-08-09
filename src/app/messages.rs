@@ -191,6 +191,7 @@ mod get_feed_messages {
     use std::collections::HashMap;
 
     use bzd_flux_api::feeds::GetUserEntriesResponse;
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessagesResponse, GetStreamsResponse, GetUserMessagesTopicsResponse,
@@ -222,6 +223,8 @@ mod get_feed_messages {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
         messages_topics: Vec<MessageTopic>,
@@ -368,6 +371,14 @@ mod get_feed_messages {
                 text: message.text().into(),
                 code: message.code().into(),
                 order: message.order(),
+                created_at: message
+                    .created_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
+                updated_at: message
+                    .updated_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
                 user: User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),
@@ -514,6 +525,7 @@ async fn get_message(
 }
 
 mod get_message {
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessageResponse, GetUserMessagesTopicsResponse, get_user_messages_topics_response,
@@ -538,6 +550,8 @@ mod get_message {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
         messages_topics: Vec<MessageTopic>,
@@ -605,6 +619,14 @@ mod get_message {
                     text: message.text().into(),
                     code: message.code().into(),
                     order: message.order(),
+                    created_at: message
+                        .created_at
+                        .and_then(ToDateTime::to_datetime)
+                        .ok_or(AppError::Unreachable)?,
+                    updated_at: message
+                        .updated_at
+                        .and_then(ToDateTime::to_datetime)
+                        .ok_or(AppError::Unreachable)?,
                     permissions: Permissions {
                         message: current_user.user_id.is_some(),
                         topics: current_user.user_id.is_some(),
@@ -747,6 +769,7 @@ async fn get_message_messages(
 mod get_message_messages {
     use std::collections::HashMap;
 
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessageMessagesResponse, GetMessagesResponse, GetStreamsResponse,
@@ -779,6 +802,8 @@ mod get_message_messages {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
         messages_topics: Vec<MessageTopic>,
@@ -923,6 +948,14 @@ mod get_message_messages {
                 text: message.text().into(),
                 code: message.code().into(),
                 order: message.order(),
+                created_at: message
+                    .created_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
+                updated_at: message
+                    .updated_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
                 user: User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),
