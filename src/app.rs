@@ -5,7 +5,7 @@ use bzd_lib::{
 };
 use tracing::info;
 
-use crate::app::{error::AppError, settings::AppSettings, state::AppState};
+use crate::app::{settings::AppSettings, state::AppState};
 
 mod auth;
 mod current_user;
@@ -28,7 +28,6 @@ pub async fn run() -> Result<(), Error> {
 
 async fn http(state: &AppState, settings: &HttpSettings) -> Result<(), Error> {
     let router = Router::new()
-        .route("/.well-known/apple-app-site-association", get(well))
         .nest(
             "/api",
             Router::new()
@@ -46,9 +45,4 @@ async fn http(state: &AppState, settings: &HttpSettings) -> Result<(), Error> {
     axum::serve(listener, router).await?;
 
     Ok(())
-}
-
-async fn well() -> Result<String, AppError> {
-    println!("QQQ");
-    Ok(String::from("value"))
 }
