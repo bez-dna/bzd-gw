@@ -185,38 +185,13 @@ async fn get_feed_messages(
         )
             .try_into()?,
     ))
-
-    // let get_messages_res = messages_service_client
-    //     .clone()
-    //     .get_messages(GetMessagesRequest {
-    //         message_ids: get_user_entries.message_ids.clone(),
-    //     })
-    //     .await?
-    //     .into_inner();
-
-    // let user_ids: HashSet<String> = get_messages_res
-    //     .messages
-    //     .iter()
-    //     .map(|it| it.user_id().into())
-    //     .collect();
-
-    // let get_users_res = users_service_client
-    //     .clone()
-    //     .get_users(GetUsersRequest {
-    //         user_ids: user_ids.clone().into_iter().collect(),
-    //     })
-    //     .await?
-    //     .into_inner();
-
-    // Ok(AppJson(
-    //     (get_user_entries, get_messages_res, get_users_res).try_into()?,
-    // ))
 }
 
 mod get_feed_messages {
     use std::collections::HashMap;
 
     use bzd_flux_api::feeds::GetUserEntriesResponse;
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessagesResponse, GetStreamsResponse, GetUserMessagesTopicsResponse,
@@ -238,7 +213,6 @@ mod get_feed_messages {
     pub struct Response {
         messages: Vec<Message>,
         topics: Vec<Topic>,
-        messages_topics: Vec<MessageTopic>,
         cursor_message_id: Option<String>,
     }
 
@@ -249,8 +223,11 @@ mod get_feed_messages {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
+        messages_topics: Vec<MessageTopic>,
     }
 
     #[derive(Serialize)]
@@ -269,7 +246,6 @@ mod get_feed_messages {
     pub struct MessageTopic {
         pub message_topic_id: String,
         pub topic_id: String,
-        pub message_id: String,
     }
 
     #[derive(Serialize)]
@@ -302,6 +278,7 @@ mod get_feed_messages {
     type Users = HashMap<String, get_users_response::User>;
     type Messages = HashMap<String, get_messages_response::Message>;
     type Streams = HashMap<String, get_streams_response::Stream>;
+    type MessagesTopics = Vec<get_user_messages_topics_response::MessageTopic>;
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
@@ -335,34 +312,49 @@ mod get_feed_messages {
                 .map(|it| (it.message_id().into(), it))
                 .collect();
 
+            let messages_topics: MessagesTopics = get_user_messages_topics.messages_topics;
+
             Ok(Self {
                 messages: get_user_entries
                     .message_ids
                     .into_iter()
                     .map(|message_id| {
-                        (message_id, &messages, &users, &streams, &current_user).try_into()
+                        (
+                            message_id,
+                            &messages,
+                            &users,
+                            &streams,
+                            &messages_topics,
+                            &current_user,
+                        )
+                            .try_into()
                     })
                     .collect::<Result<_, _>>()?,
                 topics: get_user_topics.topics.iter().map(Into::into).collect(),
-                messages_topics: get_user_messages_topics
-                    .messages_topics
-                    .iter()
-                    .map(Into::into)
-                    .collect(),
                 cursor_message_id: get_user_entries.cursor_entry_id,
             })
         }
     }
 
-    impl TryFrom<(String, &Messages, &Users, &Streams, &CurrentUser)> for Message {
+    impl
+        TryFrom<(
+            String,
+            &Messages,
+            &Users,
+            &Streams,
+            &MessagesTopics,
+            &CurrentUser,
+        )> for Message
+    {
         type Error = AppError;
 
         fn try_from(
-            (message_id, messages, users, streams, current_user): (
+            (message_id, messages, users, streams, messages_topics, current_user): (
                 String,
                 &Messages,
                 &Users,
                 &Streams,
+                &MessagesTopics,
                 &CurrentUser,
             ),
         ) -> Result<Self, Self::Error> {
@@ -379,6 +371,14 @@ mod get_feed_messages {
                 text: message.text().into(),
                 code: message.code().into(),
                 order: message.order(),
+                created_at: message
+                    .created_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
+                updated_at: message
+                    .updated_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
                 user: User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),
@@ -392,6 +392,11 @@ mod get_feed_messages {
                     topics: current_user.user_id.is_some(),
                     message: current_user.user_id.is_some(),
                 },
+                messages_topics: messages_topics
+                    .iter()
+                    .filter(|it| it.message_id() == message.message_id())
+                    .map(Into::into)
+                    .collect(),
             })
         }
     }
@@ -445,7 +450,6 @@ mod get_feed_messages {
             Self {
                 message_topic_id: message_topic.message_topic_id().into(),
                 topic_id: message_topic.topic_id().into(),
-                message_id: message_topic.message_id().into(),
             }
         }
     }
@@ -521,6 +525,7 @@ async fn get_message(
 }
 
 mod get_message {
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessageResponse, GetUserMessagesTopicsResponse, get_user_messages_topics_response,
@@ -536,7 +541,6 @@ mod get_message {
     pub struct Response {
         message: Message,
         topics: Vec<Topic>,
-        messages_topics: Vec<MessageTopic>,
     }
 
     #[derive(Serialize)]
@@ -546,8 +550,11 @@ mod get_message {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
+        messages_topics: Vec<MessageTopic>,
     }
 
     #[derive(Serialize)]
@@ -566,7 +573,6 @@ mod get_message {
     pub struct MessageTopic {
         pub message_topic_id: String,
         pub topic_id: String,
-        pub message_id: String,
     }
 
     #[derive(Serialize)]
@@ -613,6 +619,14 @@ mod get_message {
                     text: message.text().into(),
                     code: message.code().into(),
                     order: message.order(),
+                    created_at: message
+                        .created_at
+                        .and_then(ToDateTime::to_datetime)
+                        .ok_or(AppError::Unreachable)?,
+                    updated_at: message
+                        .updated_at
+                        .and_then(ToDateTime::to_datetime)
+                        .ok_or(AppError::Unreachable)?,
                     permissions: Permissions {
                         message: current_user.user_id.is_some(),
                         topics: current_user.user_id.is_some(),
@@ -624,13 +638,13 @@ mod get_message {
                         color: user.color().into(),
                     },
                     stream: None,
+                    messages_topics: get_user_messages_topics
+                        .messages_topics
+                        .iter()
+                        .map(Into::into)
+                        .collect(),
                 },
                 topics: get_user_topics.topics.iter().map(Into::into).collect(),
-                messages_topics: get_user_messages_topics
-                    .messages_topics
-                    .iter()
-                    .map(Into::into)
-                    .collect(),
             })
         }
     }
@@ -649,7 +663,6 @@ mod get_message {
             Self {
                 message_topic_id: message_topic.message_topic_id().into(),
                 topic_id: message_topic.topic_id().into(),
-                message_id: message_topic.message_id().into(),
             }
         }
     }
@@ -756,6 +769,7 @@ async fn get_message_messages(
 mod get_message_messages {
     use std::collections::HashMap;
 
+    use bzd_lib::time::{DateTime, ToDateTime};
     use bzd_messages_api::{
         messages::{
             GetMessageMessagesResponse, GetMessagesResponse, GetStreamsResponse,
@@ -778,7 +792,6 @@ mod get_message_messages {
     pub struct Response {
         messages: Vec<Message>,
         topics: Vec<Topic>,
-        messages_topics: Vec<MessageTopic>,
         cursor_message_id: Option<String>,
     }
 
@@ -789,8 +802,11 @@ mod get_message_messages {
         user: User,
         code: String,
         order: i64,
+        created_at: DateTime,
+        updated_at: DateTime,
         stream: Option<Stream>,
         permissions: Permissions,
+        messages_topics: Vec<MessageTopic>,
     }
 
     #[derive(Serialize)]
@@ -809,7 +825,6 @@ mod get_message_messages {
     pub struct MessageTopic {
         pub message_topic_id: String,
         pub topic_id: String,
-        pub message_id: String,
     }
 
     #[derive(Serialize)]
@@ -842,6 +857,7 @@ mod get_message_messages {
     type Users = HashMap<String, get_users_response::User>;
     type Messages = HashMap<String, get_messages_response::Message>;
     type Streams = HashMap<String, get_streams_response::Stream>;
+    type MessagesTopics = Vec<get_user_messages_topics_response::MessageTopic>;
 
     impl TryFrom<Responses> for Response {
         type Error = AppError;
@@ -880,29 +896,42 @@ mod get_message_messages {
                     .message_ids
                     .into_iter()
                     .map(|message_id| {
-                        (message_id, &messages, &users, &streams, &current_user).try_into()
+                        (
+                            message_id,
+                            &messages,
+                            &users,
+                            &streams,
+                            &get_user_messages_topics.messages_topics,
+                            &current_user,
+                        )
+                            .try_into()
                     })
                     .collect::<Result<_, _>>()?,
                 topics: get_user_topics.topics.iter().map(Into::into).collect(),
-                messages_topics: get_user_messages_topics
-                    .messages_topics
-                    .iter()
-                    .map(Into::into)
-                    .collect(),
                 cursor_message_id: get_message_messages.cursor_message_id,
             })
         }
     }
 
-    impl TryFrom<(String, &Messages, &Users, &Streams, &CurrentUser)> for Message {
+    impl
+        TryFrom<(
+            String,
+            &Messages,
+            &Users,
+            &Streams,
+            &MessagesTopics,
+            &CurrentUser,
+        )> for Message
+    {
         type Error = AppError;
 
         fn try_from(
-            (message_id, messages, users, streams, current_user): (
+            (message_id, messages, users, streams, messages_topics, current_user): (
                 String,
                 &Messages,
                 &Users,
                 &Streams,
+                &MessagesTopics,
                 &CurrentUser,
             ),
         ) -> Result<Self, Self::Error> {
@@ -919,6 +948,14 @@ mod get_message_messages {
                 text: message.text().into(),
                 code: message.code().into(),
                 order: message.order(),
+                created_at: message
+                    .created_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
+                updated_at: message
+                    .updated_at
+                    .and_then(ToDateTime::to_datetime)
+                    .ok_or(AppError::Unreachable)?,
                 user: User {
                     user_id: user.user_id().into(),
                     name: user.name().into(),
@@ -932,6 +969,11 @@ mod get_message_messages {
                     topics: current_user.user_id.is_some(),
                     message: current_user.user_id.is_some(),
                 },
+                messages_topics: messages_topics
+                    .iter()
+                    .filter(|it| it.message_id() == message.message_id())
+                    .map(Into::into)
+                    .collect(),
             })
         }
     }
@@ -985,7 +1027,6 @@ mod get_message_messages {
             Self {
                 message_topic_id: message_topic.message_topic_id().into(),
                 topic_id: message_topic.topic_id().into(),
-                message_id: message_topic.message_id().into(),
             }
         }
     }

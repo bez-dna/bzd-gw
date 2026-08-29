@@ -8,7 +8,6 @@ use tracing::info;
 use crate::app::{settings::AppSettings, state::AppState};
 
 mod auth;
-mod contacts;
 mod current_user;
 mod error;
 mod json;
@@ -34,7 +33,6 @@ async fn http(state: &AppState, settings: &HttpSettings) -> Result<(), Error> {
             Router::new()
                 .route("/healthz", get(|| async {}))
                 .nest("/auth", auth::router())
-                .nest("/contacts", contacts::router())
                 .nest("/topics", topics::router())
                 .nest("/users", users::router())
                 .nest("/messages", messages::router()),

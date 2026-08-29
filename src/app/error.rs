@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::typed_header::TypedHeaderRejection;
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::debug;
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -61,6 +61,12 @@ impl From<Infallible> for AppError {
 
 impl From<TypedHeaderRejection> for AppError {
     fn from(_: TypedHeaderRejection) -> Self {
+        Self::Common
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(_: serde_json::Error) -> Self {
         Self::Common
     }
 }
